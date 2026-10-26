@@ -1,0 +1,38 @@
+{
+  "name": "MPC DJ FX 2",
+  "vendor": "MPCDJ",
+  "uid": "DjF2",
+  "version": 2000,
+  "so": "mpc_djfx2.so",
+  "params": "params.json",
+  "layout": "layout.conf",
+  "presets": "presets.json",
+  "effect": true,
+  "defines": {
+    "HAS_LFO_BPM": 1,
+    "HAS_DISPLAY_REV": 1,
+    "DISPLAY_REV_NO_UPDATE": 1
+  },
+  "build": {
+    "root": ".",
+    "sources": [
+      "src/djfx_engine.c",
+      "src/iso.c",
+      "src/dub_delay.c",
+      "src/dub_filter.c",
+      "src/dub_reverb.c",
+      "src/repeat.c",
+      "src/flanger.c",
+      "src/grain.c",
+      "src/limiter.c"
+    ],
+    "cflags": [
+      "-Iinclude"
+    ],
+    "libs": [
+      "-lm"
+    ]
+  },
+  "art": "html",
+  "skin_post": "skin_post.py"
+}

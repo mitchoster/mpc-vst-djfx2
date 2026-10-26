@@ -1,0 +1,526 @@
+{
+  "name": "MPC DJ FX 2",
+  "params": [
+    {
+      "key": "iso_lo",
+      "name": "LOW",
+      "min": -24,
+      "max": 6,
+      "default": 0,
+      "unit": "dB",
+      "display": "int"
+    },
+    {
+      "key": "iso_mid",
+      "name": "MID",
+      "min": -24,
+      "max": 6,
+      "default": 0,
+      "unit": "dB",
+      "display": "int"
+    },
+    {
+      "key": "iso_hi",
+      "name": "HI",
+      "min": -24,
+      "max": 6,
+      "default": 0,
+      "unit": "dB",
+      "display": "int"
+    },
+    {
+      "key": "iso_lo_x",
+      "name": "LO X",
+      "min": 60,
+      "max": 800,
+      "default": 250,
+      "unit": "Hz",
+      "display": "int"
+    },
+    {
+      "key": "iso_hi_x",
+      "name": "HI X",
+      "min": 800,
+      "max": 8000,
+      "default": 2500,
+      "unit": "Hz",
+      "display": "int"
+    },
+    {
+      "key": "dj_filter",
+      "name": "FILTER",
+      "min": -1,
+      "max": 1,
+      "default": 0,
+      "dynamic_display": true
+    },
+    {
+      "key": "dj_reso",
+      "name": "RESO",
+      "min": 0,
+      "max": 1,
+      "default": 0.2,
+      "dynamic_display": true
+    },
+    {
+      "key": "rep_mode",
+      "name": "GRID",
+      "options": [
+        "Off",
+        "1/2",
+        "1/4",
+        "1/8",
+        "1/8T",
+        "1/6",
+        "1/16",
+        "1/32"
+      ],
+      "default": "Off"
+    },
+    {
+      "key": "rep_gate",
+      "name": "GATE",
+      "min": 0,
+      "max": 1,
+      "default": 0.25,
+      "dynamic_display": true
+    },
+    {
+      "key": "rep_chance",
+      "name": "CHANCE",
+      "min": 0,
+      "max": 1,
+      "default": 1.0,
+      "dynamic_display": true
+    },
+    {
+      "key": "rep_count",
+      "name": "REPEATS",
+      "min": 0,
+      "max": 8,
+      "default": 4,
+      "display": "int",
+      "dynamic_display": true
+    },
+    {
+      "key": "rep_mix",
+      "name": "GLITCH",
+      "min": 0,
+      "max": 1,
+      "default": 1.0,
+      "dynamic_display": true
+    },
+    {
+      "key": "fill_mode",
+      "name": "AUTO-FILL",
+      "options": [
+        "Fill",
+        "Stutter"
+      ],
+      "default": "Fill"
+    },
+    {
+      "key": "dly_time",
+      "name": "TIME",
+      "min": 1,
+      "max": 7000,
+      "default": 350,
+      "unit": "ms",
+      "dynamic_display": true
+    },
+    {
+      "key": "dly_sync",
+      "name": "SYNC",
+      "options": [
+        "Free",
+        "Sync"
+      ],
+      "default": "Sync"
+    },
+    {
+      "key": "dly_div",
+      "name": "DIV",
+      "options": [
+        "1/1",
+        "1/2",
+        "1/2D",
+        "1/4",
+        "1/4D",
+        "1/8",
+        "1/8D",
+        "1/8T",
+        "1/16",
+        "1/16D",
+        "1/16T",
+        "1/32"
+      ],
+      "default": "1/8"
+    },
+    {
+      "key": "dly_fbk",
+      "name": "FBK",
+      "min": 0,
+      "max": 1,
+      "default": 0.55,
+      "dynamic_display": true
+    },
+    {
+      "key": "dly_tone",
+      "name": "TONE",
+      "min": 0,
+      "max": 1,
+      "default": 0.4,
+      "dynamic_display": true
+    },
+    {
+      "key": "dly_mix",
+      "name": "DRY/WET",
+      "min": 0,
+      "max": 1,
+      "default": 1.0,
+      "dynamic_display": true
+    },
+    {
+      "key": "dly_pingpong",
+      "name": "PONG",
+      "options": [
+        "Off",
+        "On"
+      ],
+      "default": "Off"
+    },
+    {
+      "key": "verb_mode",
+      "name": "REVERB",
+      "options": [
+        "Plate",
+        "Hall"
+      ],
+      "default": "Plate"
+    },
+    {
+      "key": "verb_amount",
+      "name": "VERB",
+      "min": 0,
+      "max": 1,
+      "default": 0.3,
+      "dynamic_display": true
+    },
+    {
+      "key": "verb_decay",
+      "name": "DECAY",
+      "min": 0,
+      "max": 1,
+      "default": 0.5,
+      "dynamic_display": true
+    },
+    {
+      "key": "verb_damp",
+      "name": "DAMP",
+      "min": 0,
+      "max": 1,
+      "default": 0.5,
+      "dynamic_display": true
+    },
+    {
+      "key": "verb_predelay",
+      "name": "PRE",
+      "min": 0,
+      "max": 200,
+      "default": 20,
+      "unit": "ms",
+      "display": "int"
+    },
+    {
+      "key": "hp_hz",
+      "name": "HPF",
+      "min": 20,
+      "max": 20000,
+      "default": 26,
+      "unit": "Hz",
+      "display": "int"
+    },
+    {
+      "key": "hp_reso",
+      "name": "HP RESO",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "dynamic_display": true
+    },
+    {
+      "key": "fl_rate",
+      "name": "FL RATE",
+      "min": 0,
+      "max": 1,
+      "default": 0.3,
+      "dynamic_display": true
+    },
+    {
+      "key": "fl_depth",
+      "name": "FL DEPTH",
+      "min": 0,
+      "max": 1,
+      "default": 0.5,
+      "dynamic_display": true
+    },
+    {
+      "key": "fl_fbk",
+      "name": "FL FBK",
+      "min": 0,
+      "max": 1,
+      "default": 0.5,
+      "dynamic_display": true
+    },
+    {
+      "key": "fl_mix",
+      "name": "FL MIX",
+      "min": 0,
+      "max": 1,
+      "default": 0.5,
+      "dynamic_display": true
+    },
+    {
+      "key": "gr_rate",
+      "name": "GRAIN RATE",
+      "min": 1,
+      "max": 200,
+      "default": 20,
+      "dynamic_display": true
+    },
+    {
+      "key": "gr_time",
+      "name": "GRAIN TIME",
+      "min": 0.5,
+      "max": 500,
+      "default": 20,
+      "dynamic_display": true
+    },
+    {
+      "key": "gr_spray",
+      "name": "GRAIN SPRAY",
+      "min": 0,
+      "max": 1,
+      "default": 0.35,
+      "dynamic_display": true
+    },
+    {
+      "key": "gr_mix",
+      "name": "GRAIN MIX",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "dynamic_display": true
+    },
+    {
+      "key": "mac_lo",
+      "name": "LOW-EQ",
+      "min": 0,
+      "max": 1,
+      "default": 1.0,
+      "dynamic_display": true
+    },
+    {
+      "key": "mac_mid",
+      "name": "MID-EQ",
+      "min": 0,
+      "max": 1,
+      "default": 1.0,
+      "dynamic_display": true
+    },
+    {
+      "key": "mac_hi",
+      "name": "HI-EQ",
+      "min": 0,
+      "max": 1,
+      "default": 1.0,
+      "dynamic_display": true
+    },
+    {
+      "key": "mac_lpf",
+      "name": "LPF",
+      "min": 0,
+      "max": 1,
+      "default": 1.0,
+      "dynamic_display": true
+    },
+    {
+      "key": "mac_glitch",
+      "name": "GLITCH",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "dynamic_display": true
+    },
+    {
+      "key": "mac_verb",
+      "name": "VERB",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "dynamic_display": true
+    },
+    {
+      "key": "mac_fade",
+      "name": "FADE",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "dynamic_display": true
+    },
+    {
+      "key": "mac_fill",
+      "name": "AUTO-FILL",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "dynamic_display": true
+    },
+    {
+      "key": "output_gain",
+      "name": "OUTPUT",
+      "min": -24,
+      "max": 24,
+      "default": 0,
+      "unit": "dB",
+      "display": "int"
+    },
+    {
+      "key": "limiter",
+      "name": "LIMITER",
+      "options": [
+        "Off",
+        "On"
+      ],
+      "default": "On"
+    },
+    {
+      "key": "panic",
+      "name": "PANIC",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "momentary": true
+    },
+    {
+      "key": "vu",
+      "name": "VU",
+      "options": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23"
+      ],
+      "default": "0"
+    },
+    {
+      "key": "mix",
+      "name": "MIX",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "dynamic_display": true
+    }
+  ],
+  "sections": [
+    {
+      "label": "Isolator",
+      "keys": [
+        "iso_lo",
+        "iso_mid",
+        "iso_hi",
+        "iso_lo_x",
+        "iso_hi_x"
+      ]
+    },
+    {
+      "label": "Filter",
+      "keys": [
+        "dj_filter",
+        "dj_reso"
+      ]
+    },
+    {
+      "label": "Repeat",
+      "keys": [
+        "rep_mode",
+        "rep_gate",
+        "rep_chance",
+        "rep_count",
+        "rep_mix",
+        "fill_mode"
+      ]
+    },
+    {
+      "label": "Delay",
+      "keys": [
+        "dly_time",
+        "dly_sync",
+        "dly_div",
+        "dly_fbk",
+        "dly_tone",
+        "dly_mix",
+        "dly_pingpong"
+      ]
+    },
+    {
+      "label": "Reverb",
+      "keys": [
+        "verb_mode",
+        "verb_amount",
+        "verb_decay",
+        "verb_damp",
+        "verb_predelay",
+        "hp_hz",
+        "hp_reso"
+      ]
+    },
+    {
+      "label": "Flanger",
+      "keys": [
+        "fl_rate",
+        "fl_depth",
+        "fl_fbk",
+        "fl_mix"
+      ]
+    },
+    {
+      "label": "Output",
+      "keys": [
+        "mac_lo",
+        "mac_mid",
+        "mac_hi",
+        "mac_lpf",
+        "mac_glitch",
+        "mac_verb",
+        "mac_fade",
+        "mac_fill",
+        "output_gain",
+        "limiter",
+        "panic",
+        "vu",
+        "mix"
+      ]
+    }
+  ]
+}

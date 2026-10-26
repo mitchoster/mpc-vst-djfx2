@@ -1,0 +1,2 @@
+worst p99 30.3%, worst block 67.0%, background threads up to 0.0% of a core -> WARN
+{"plugin":"/tmp/mpc_djfx2.so","instrument":0,"open_ms":1.4,"p99_pct":30.3,"max_pct":67.0,"threads_pct":0.0,"verdict":"WARN"}

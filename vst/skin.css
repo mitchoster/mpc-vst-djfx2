@@ -1,0 +1,50 @@
+/* MPC DJ FX 2 — ivory/ink skin overrides for the browser renderer (layout.conf `art_css=skin.css`).
+
+   Reference (2026-10-26, owner): MagicStino's Magic Tape Echo for the chassis and the type, Ableton's
+   built-in devices for the controls — flat plates, one accent, no chrome. The per-page artwork
+   (vst/art/make_faceplate.py -> bg_<page>.png) carries masthead and section frames, so the frame
+   chrome is switched off here; live names and values are drawn by MPC (see vst/skin_post.py for their
+   colours: ink names on the paper, cream values on the plates). */
+
+:root {
+  --radius: 5px;
+  --sheen: 0.05;               /* Ableton-flat: only a whisper of highlight */
+  --shadow: none;
+  --label-size: 15px;
+  --seg-size: 13px;
+  --button-size: 14px;
+}
+
+/* the artwork already draws panel edges and section frames */
+.frame-border { fill: none; stroke: none; }
+.frame-rule { display: none; }
+.frame-title { display: none; }
+
+/* read-out plates: dark ink plate with cream digits (Ableton value boxes) */
+.box { fill: var(--lcd); stroke: none; rx: 4px; ry: 4px; }
+.box-label { fill: #efe9da; font-weight: 700; letter-spacing: 0.10em; }
+
+/* knobs: ink body, cream pointer, quiet track, accent arc for the set value */
+.knob-face { fill: var(--knob-face); stroke: #0b1210; stroke-width: 1.5; }
+.knob-pointer { stroke: var(--knob-dot); stroke-width: 3; }
+.knob-track { stroke: rgba(30, 42, 38, 0.13); stroke-width: 1.5; }
+.knob-arc { stroke: var(--accent); stroke-width: 2.5; }
+.knob-sheen { display: none; }
+.knob-face { filter: none; }
+
+/* option segments: paper tiles that turn ink-red when chosen */
+.seg-bg { rx: 3px; ry: 3px; stroke: rgba(30, 42, 38, 0.18); stroke-width: 1; }
+.seg-tx { font-weight: 600; letter-spacing: 0.06em; }
+
+/* toggles */
+.pill-track { fill: #d8d1bf; stroke: rgba(30, 42, 38, 0.25); stroke-width: 1; }
+.pill-thumb { fill: var(--knob-face); }
+.on .pill-thumb { fill: var(--accent-hi); }
+
+/* triggers (PANIC) */
+.button-bg { fill: var(--accent-hi); stroke: #a33d16; stroke-width: 1; }  /* orange = hot/action, green = value */
+.button-tx { fill: #f6f2e6; font-weight: 700; letter-spacing: 0.12em; }
+
+/* sliders and meters keep the ink/cream pair */
+.slider-well { fill: #d8d1bf; }
+.slider-fill { fill: var(--accent); }

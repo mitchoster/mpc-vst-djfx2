@@ -1,0 +1,83 @@
+{
+  "presets": [
+    {
+      "name": "DJ Classic",
+      "values": {
+        "mac_lpf": 0.3,
+        "mac_verb": 0.35,
+        "mac_fade": 0.25,
+        "mac_lo": 0.85,
+        "mac_mid": 0.8,
+        "mac_hi": 0.75
+      }
+    },
+    {
+      "name": "Filter Ride",
+      "values": {
+        "mac_lpf": 0.55
+      }
+    },
+    {
+      "name": "Stutter Fill",
+      "values": {
+        "mac_fill": 1.0
+      }
+    },
+    {
+      "name": "Grain Wash",
+      "values": {
+        "mac_glitch": 0.7,
+        "gr_spray": 0.6,
+        "gr_time": 6.0,
+        "mac_verb": 0.3
+      }
+    },
+    {
+      "name": "Glitch Madness",
+      "values": {
+        "mac_glitch": 1.0,
+        "mac_fill": 0.8
+      }
+    },
+    {
+      "name": "Echo Throw",
+      "values": {
+        "mac_fade": 1.0
+      }
+    },
+    {
+      "name": "Dub Wash",
+      "values": {
+        "mac_verb": 1.0,
+        "mac_fade": 0.45
+      }
+    },
+    {
+      "name": "Siren Dub",
+      "values": {
+        "mac_mid": 0.0,
+        "mac_hi": 0.0
+      }
+    },
+    {
+      "name": "Telephone",
+      "values": {
+        "iso_lo": -24.0,
+        "iso_hi": -24.0,
+        "iso_lo_x": 250.0,
+        "iso_hi_x": 2500.0,
+        "iso_mid": 0.0,
+        "mac_fade": 0.0
+      }
+    },
+    {
+      "name": "Flanger Sweep",
+      "values": {
+        "fl_rate": 0.25,
+        "fl_depth": 0.6,
+        "fl_fbk": 0.6,
+        "fl_mix": 0.5
+      }
+    }
+  ]
+}
