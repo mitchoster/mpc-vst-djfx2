@@ -18,7 +18,7 @@ import os
 from PIL import Image, ImageDraw
 
 W, H = 304, 40
-STEPS = 24
+STEPS = 81
 BEZEL = 3
 TROUGH = (223, 216, 200, 255)   # paper trough (skin: ivory + ink, 2026-10-26)
 FRAME = (30, 42, 38, 255)       # ink bezel
@@ -51,15 +51,21 @@ def frame(step):
 
 
 def main():
+    global W, H, STEPS
     ap = argparse.ArgumentParser()
     ap.add_argument("-o", "--out", default="vst/art/vu")
+    ap.add_argument("--steps", type=int, default=STEPS)
+    ap.add_argument("--w", type=int, default=W)
+    ap.add_argument("--h", type=int, default=H)
+    ap.add_argument("--prefix", default="vu")
     ap.add_argument("-s", "--strip", default="vst/art/vu_strip.png",
                     help="filmstrip output: STEPS frames of WxH stacked down, minimum first")
     a = ap.parse_args()
+    STEPS, W, H = a.steps, a.w, a.h
     os.makedirs(a.out, exist_ok=True)
     frames = [frame(s) for s in range(STEPS)]
     for step, img in enumerate(frames):
-        img.save(os.path.join(a.out, "vu_%02d.png" % step))
+        img.save(os.path.join(a.out, "%s_%03d.png" % (a.prefix, step)))
     strip = Image.new("RGBA", (W, H * STEPS), (0, 0, 0, 0))
     for step, img in enumerate(frames):
         strip.paste(img, (0, step * H))

@@ -34,7 +34,7 @@ PAPER = (239, 232, 216)
 PAPER_EDGE = (226, 218, 198)
 INK = (25, 21, 17)
 INK_SOFT = (74, 66, 56)
-RULE = (200, 190, 170)
+RULE = (176, 166, 146)
 ACCENT = (217, 83, 30)
 CREAM = (246, 241, 229)
 
@@ -120,9 +120,9 @@ def section(d, box, caption, radius=10):
     A rounded frame was the first idea, but every control row starts close to the frame's top edge and the
     live knob names/plates then collide with it; a rule above the row never does."""
     x0, y0, x1, y1 = box[0], box[1] - Y_OFF, box[2], box[3] - Y_OFF
-    d.line([(x0, y0), (x1, y0)], fill=RULE, width=2)
+    d.line([(x0, y0), (x1, y0)], fill=RULE, width=3)
     if caption:
-        f = font("semi", 14)
+        f = font("bold", 16)
         d.text((x0 + 14, y0 - 22), caption.upper(), font=f, fill=INK_SOFT)
         d.rectangle([x0, y0 - 20, x0 + 3, y0 - 6], fill=ACCENT)
 
@@ -153,7 +153,7 @@ PAGES = {
     "dj": ("DJ", "FILTER  /  3-BAND ISOLATOR  /  MASTER", [
         ((46, 226, 1010, 430), "dj filter  \u00b7  isolator"),
         ((46, 442, 700, 700), "master"),
-    ], (866, 556, 1226, 640)),
+    ], (866, 540, 1226, 656)),
     "repeat": ("BEAT REPEAT", "GRID  /  GATE  /  CHANCE", [
         ((46, 236, 1234, 420), "grid  \u00b7  mode"),
         ((46, 442, 1234, 700), "gate  \u00b7  chance  \u00b7  repeats"),

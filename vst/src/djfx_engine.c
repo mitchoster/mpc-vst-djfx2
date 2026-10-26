@@ -28,7 +28,8 @@
 
 #define MAXFRAMES 128
 #define VALLEN 40
-#define VU_STEPS 24
+#define VU_STEPS 81   /* 81 frames = 0.6 dB per step on a 48 dB scale (was 24 = 2.09 dB) */
+#define MET_STEPS 41   /* per-page stage meters: 1.2 dB per step */
 #define VU_FLOOR_DB (-48.0f)
 
 static const char *const KEYS[] = {
@@ -41,7 +42,8 @@ static const char *const KEYS[] = {
     "fl_rate", "fl_depth", "fl_fbk", "fl_mix",
     "gr_rate", "gr_time", "gr_spray", "gr_mix",
     "mac_lo", "mac_mid", "mac_hi", "mac_lpf", "mac_glitch", "mac_verb", "mac_fade", "mac_fill",
-    "output_gain", "limiter", "panic", "vu", "mix"
+    "output_gain", "limiter", "panic", "vu", "mix",
+    "dly_tail", "verb_tail", "rep_act", "dly_show", "out_show"
 };
 #define NKEYS ((int)(sizeof KEYS / sizeof KEYS[0]))
 _Static_assert(sizeof KEYS / sizeof KEYS[0] == NPARAMS,
@@ -61,7 +63,8 @@ enum {
     P_FL_RATE, P_FL_DEPTH, P_FL_FBK, P_FL_MIX,
     P_GR_RATE, P_GR_TIME, P_GR_SPRAY, P_GR_MIX,
     P_MAC_LO, P_MAC_MID, P_MAC_HI, P_MAC_LPF, P_MAC_GLITCH, P_MAC_VERB, P_MAC_FADE, P_MAC_FILL,
-    P_OUTPUT_GAIN, P_LIMITER, P_PANIC, P_VU, P_MIX
+    P_OUTPUT_GAIN, P_LIMITER, P_PANIC, P_VU, P_MIX,
+    P_DLY_TAIL, P_VERB_TAIL, P_REP_ACT, P_DLY_SHOW, P_OUT_SHOW
 };
 
 typedef struct {
@@ -80,7 +83,11 @@ typedef struct {
     float out_gain;         /* linear */
     unsigned display_rev;   /* HAS_DISPLAY_REV */
     int   vu_step;          /* last reported VU step (-1 = never) */
+    int   met_step[3];      /* last reported stage steps: delay, verb, repeat (-1 = never) */
+    int   met_tick;         /* samples since the last 20 Hz meter tick */
+    unsigned long long pending;  /* meter keys waiting for mpc_engine_changed() */
     float vu_env;
+    float dly_env, verb_env, rep_env;
     int   panic_cd;         /* panic debounce, in samples */
     int   panic_state;      /* panic flush staged across blocks (0 = idle, 1..3 = stage) */
     char  val[NKEYS][VALLEN];
@@ -491,6 +498,7 @@ static void *create(const char *data_dir)
     c->mix = 0.35f;
     c->out_gain = 1.0f;
     c->vu_step = -1;
+    for (int k = 0; k < 3; k++) c->met_step[k] = -1;
     build_dsp(c);
     if (!dsp_ok(c)) { free_dsp(c); free(c); return NULL; }
     for (int i = 0; i < NKEYS; i++) {
@@ -541,20 +549,19 @@ static int get_param(void *inst, const char *key, char *buf, int buf_len)
         }
         return p;
     }
+    /* live text (params.json "display": "string"): polled every 100 ms, no numeric value */
+    if (!strcmp(key, "dly_show")) return get_param(c, "dly_time_display", buf, buf_len);
+    if (!strcmp(key, "out_show")) {
+        const float db = 20.0f * log10f(c->vu_env + 1e-6f);
+        snprintf(buf, (size_t)buf_len, "%+.1f dBFS", db);
+        return 1;
+    }
     const int i = key_idx(key);
     if (i < 0) {
         if (!strcmp(key, "display_rev")) {
-            /* the live VU is display-only: derive its step here (on the poll) and count it into
-             * display_rev so the host re-reads the value (DISPLAY_REV_NO_UPDATE: moved values only) */
-            int s = (int)lrintf((20.0f * log10f(c->vu_env + 1e-6f) - VU_FLOOR_DB)
-                                / (0.0f - VU_FLOOR_DB) * (float)(VU_STEPS - 1));
-            if (s < 0) s = 0;
-            if (s >= VU_STEPS) s = VU_STEPS - 1;
-            if (s != c->vu_step) {
-                c->vu_step = s;
-                snprintf(c->val[P_VU], VALLEN, "%d", s);
-                c->display_rev++;
-            }
+            /* the meters are published from the 20 Hz tick in process() (2026-10-26): deriving them
+             * here capped the needle at the host's 100 ms readout poll and coupled the number of
+             * frames to the poll. display_rev just counts what changed since the last poll. */
             snprintf(buf, (size_t)buf_len, "%u", c->display_rev);
             return 1;
         }
@@ -622,11 +629,29 @@ static void process(void *inst, const int16_t *in_lr, int16_t *out_lr, int frame
     iso_process(c->iso, c->l, c->r, frames);
     dub_filter_process(c->djf, c->l, c->r, frames);
     repeat_process(c->rep, c->l, c->r, frames);
+    float rep_pk = 0.0f;
+    for (int i = 0; i < frames; i++) {
+        const float a = fabsf(c->l[i]), b = fabsf(c->r[i]);
+        if (a > rep_pk) rep_pk = a;
+        if (b > rep_pk) rep_pk = b;
+    }
 
     /* wet path: delay (wet only) -> VERB high-pass -> reverb -> flanger */
     dub_delay_process(c->delay, c->l, c->r, c->w1, c->w2, frames);
+    float dly_pk = 0.0f;
+    for (int i = 0; i < frames; i++) {
+        const float a = fabsf(c->w1[i]), b = fabsf(c->w2[i]);
+        if (a > dly_pk) dly_pk = a;
+        if (b > dly_pk) dly_pk = b;
+    }
     dub_filter_process(c->vhf, c->w1, c->w2, frames);
     dub_reverb_process(c->rv, c->w1, c->w2, frames);
+    float verb_pk = 0.0f;
+    for (int i = 0; i < frames; i++) {
+        const float a = fabsf(c->w1[i]), b = fabsf(c->w2[i]);
+        if (a > verb_pk) verb_pk = a;
+        if (b > verb_pk) verb_pk = b;
+    }
     flanger_process(c->fl, c->w1, c->w2, frames);
     grain_process(c->gr, c->w1, c->w2, frames);
 
@@ -664,8 +689,36 @@ static void process(void *inst, const int16_t *in_lr, int16_t *out_lr, int frame
         out_lr[2 * i + 1] = (int16_t)b;
     }
 
-    /* master VU: peak with a slow release (sampled by the 100 ms display poll) */
-    c->vu_env = pk > c->vu_env ? pk : c->vu_env * 0.9995f;
+    /* master VU + stage meters: peak with a slow release */
+    c->vu_env   = pk      > c->vu_env   ? pk      : c->vu_env   * 0.9995f;
+    c->dly_env  = dly_pk  > c->dly_env  ? dly_pk  : c->dly_env  * 0.9995f;
+    c->verb_env = verb_pk > c->verb_env ? verb_pk : c->verb_env * 0.9995f;
+    c->rep_env  = rep_pk  > c->rep_env  ? rep_pk  : c->rep_env  * 0.9995f;
+
+    /* 20 Hz: publish VU + the three stage meters. The host re-reads a value when display_rev changed
+     * (DISPLAY_REV_NO_UPDATE), so one counter serves all four. */
+    c->met_tick += frames;
+    if (c->met_tick >= (int)(c->fs / 20.0f)) {
+        c->met_tick = 0;
+        struct { float env; int *step; int idx; int top; } m[4] = {
+            { c->vu_env,   &c->vu_step,      P_VU,        VU_STEPS  },
+            { c->dly_env,  &c->met_step[0],  P_DLY_TAIL,  MET_STEPS },
+            { c->verb_env, &c->met_step[1],  P_VERB_TAIL, MET_STEPS },
+            { c->rep_env,  &c->met_step[2],  P_REP_ACT,   MET_STEPS },
+        };
+        for (int k = 0; k < 4; k++) {
+            const int top = m[k].top;
+            int st = (int)lrintf((20.0f * log10f(m[k].env + 1e-6f) - VU_FLOOR_DB)
+                                 / (0.0f - VU_FLOOR_DB) * (float)(top - 1));
+            if (st < 0) st = 0;
+            if (st >= top) st = top - 1;
+            if (st != *m[k].step) {
+                *m[k].step = st;
+                snprintf(c->val[m[k].idx], VALLEN, "%d", st);
+                c->pending |= 1ull << m[k].idx;   /* wrapper reports it (engine.h hook), no 100 ms poll */
+            }
+        }
+    }
     if (c->panic_cd > 0) { c->panic_cd -= frames; if (c->panic_cd < 0) c->panic_cd = 0; }
 }
 
@@ -686,6 +739,24 @@ static void engine_reset(void *inst)
     if (!c) return;
     flush_tails(c);
     limiter_reset(c->lim);
+}
+
+/* engine.h's push hook: the wrapper asks once per block which keys the engine changed by itself and tells the
+ * host as it does for a MIDI CC (at most every 1024 frames per control = ~23 ms), which is the documented way to
+ * drive a filmstrip meter. Visibility matters: the build uses -fvisibility=hidden. */
+__attribute__((visibility("default")))
+int mpc_engine_changed(void *inst, char *key, int len)
+{
+    ctx_t *c = inst;
+    if (!c || !key || len <= 0) return 0;
+    for (int i = 0; i < NKEYS; i++) {
+        if (c->pending & (1ull << i)) {
+            c->pending &= ~(1ull << i);
+            snprintf(key, (size_t)len, "%s", KEYS[i]);
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static const mpc_engine_t ENGINE = { create, destroy, midi, set_param, get_param, render, process,
