@@ -15,7 +15,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"     # .../vst
 MV="${MPC_VST_PLUGINS:-/workspace/mpc-vst-plugins}"
 FOLDER="MPCDJ - VST - MPC DJ FX 2"
 SO="mpc_djfx2.so"
-VERSION="2.2.0"
+VERSION="2.2.1"
 ABOUT="One-slot DJ insert: 3-band isolator, DJ filter, beat repeat, delay, reverb, flanger, grain delay (the original rack's Glitch stage) and a true-peak limiter, driven by the eight macros measured from Lenny Kiser's DJ-FX rack."
 
 host() {  # in-container path -> host-visible path (for the Docker daemon)
