@@ -13,3 +13,16 @@ To build one:
 
 Both were built and rendered that way; see the release assets `-ui-classic.zip`, `-mpc-armv7.zip` (Studio) and
 `-ui-pulytek.zip` (Rack).
+
+## Switching the interface on the device
+
+`tools/ui-set.sh` swaps `Plugin Skins` in place (it saves the current one under `/data/djfx2-skins/` first):
+
+```sh
+scp tools/ui-set.sh "root@<device>:/sdcard/Synths/MPCDJ - VST - MPC DJ FX 2/"
+ssh root@<device> 'cd "/sdcard/Synths/MPCDJ - VST - MPC DJ FX 2" && ./ui-set.sh /tmp/MPC-DJ-FX-2-3.0.1-ui-pulytek.zip'
+```
+
+An interface can only change while no instance holds it, so the script ends with the step that matters:
+remove the plugin instance on the track and insert it again. `./ui-set.sh --list` shows what is saved,
+`--use <name>` switches back. Installing another release zip with `install.sh` does the same thing.
