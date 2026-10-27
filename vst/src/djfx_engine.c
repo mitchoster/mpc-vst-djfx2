@@ -48,7 +48,8 @@ static const char *const KEYS[] = {
     "dly_tail", "verb_tail", "rep_act", "dly_show", "out_show",
     /* the composed ECHO display: one parameter per column, 17 filmstrip frames each */
     "ech_00", "ech_01", "ech_02", "ech_03", "ech_04", "ech_05", "ech_06", "ech_07",
-    "ech_08", "ech_09", "ech_10", "ech_11", "ech_12", "ech_13", "ech_14", "ech_15"
+    "ech_08", "ech_09", "ech_10", "ech_11", "ech_12", "ech_13", "ech_14", "ech_15",
+    "ech_on"
 };
 #define NKEYS ((int)(sizeof KEYS / sizeof KEYS[0]))
 _Static_assert(sizeof KEYS / sizeof KEYS[0] == NPARAMS,
@@ -70,7 +71,8 @@ enum {
     P_MAC_LO, P_MAC_MID, P_MAC_HI, P_MAC_LPF, P_MAC_GLITCH, P_MAC_VERB, P_MAC_FADE, P_MAC_FILL,
     P_OUTPUT_GAIN, P_LIMITER, P_PANIC, P_VU, P_MIX,
     P_DLY_TAIL, P_VERB_TAIL, P_REP_ACT, P_DLY_SHOW, P_OUT_SHOW,
-    P_ECH0                                  /* P_ECH0 + i = the i-th ECHO column */
+    P_ECH0,                                 /* P_ECH0 + i = the i-th ECHO column */
+    P_ECH_ON = P_ECH0 + 16                  /* the display's on/off switch (16 columns) */
 };
 
 typedef struct {
@@ -730,7 +732,17 @@ static void process(void *inst, const int16_t *in_lr, int16_t *out_lr, int frame
         /* composed ECHO display: shifted at 5 Hz (a slow waterfall; the screen thread of the MPC
          * pays for every column that changes, so this is deliberately not the 20 Hz rate) */
         c->ech_tick += (int)(c->fs / 20.0f);
-        if (c->ech_tick >= (int)(c->fs / 5.0f)) {
+        if (atoi(c->val[P_ECH_ON]) == 0) {
+            /* display off: park every column at zero once and stop the history (no pushes, no repaints) */
+            for (int k = 0; k < ECH_COLS; k++) {
+                if (c->ech_step[k] != 0) {
+                    c->ech_step[k] = 0;
+                    snprintf(c->val[P_ECH0 + k], VALLEN, "0");
+                    c->pending |= 1ull << (P_ECH0 + k);
+                }
+                c->ech_env[k] = 0.0f;
+            }
+        } else if (c->ech_tick >= (int)(c->fs / 5.0f)) {
             c->ech_tick = 0;
             for (int k = ECH_COLS - 1; k > 0; k--) c->ech_env[k] = c->ech_env[k - 1];
             c->ech_env[0] = dly_pk;
