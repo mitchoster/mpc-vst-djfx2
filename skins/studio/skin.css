@@ -1,0 +1,40 @@
+/* MPC DJ FX 2 — charcoal/amber skin for the browser renderer (layout.conf `art_css=skin.css`).
+
+   The plates, the plot grid, the card frames and every caption are baked by vst/art/make_plate.py; the
+   knobs, the curve columns and the meters are filmstrips from vst/art/make_widgets.py. What is left for
+   this stylesheet is the handful of controls the renderer DRAWS: option tiles (enum_h), the PANIC
+   button and the live read-out plates. Keep it to colour, shape and type — sizes and positions belong to
+   layout.conf, because MPC places its own live text on top. */
+
+:root {
+  --radius: 4px;
+  --sheen: 0.03;              /* flat tiles: the plate is matte, not glossy */
+  --shadow: none;
+  --label-size: 15px;
+  --seg-size: 12px;           /* option tile text (4 x 54 px tiles on the grid rows) */
+  --button-size: 15px;
+}
+
+/* the artwork already draws panel edges and card frames: no second frame on top */
+.frame-border, .frame-rule, .frame-title { display: none; }
+
+/* live read-outs sit on their own baked plate: no box, just the number */
+.box { fill: none; stroke: none; }
+.box-label { fill: var(--ink-faint); font-size: 10px; letter-spacing: 0.16em; }
+
+/* option tiles: matte charcoal at rest, amber when chosen (theme seg_* colours) */
+.seg-bg { rx: 4px; ry: 4px; }
+.seg-sheen { display: none; }
+.seg-tx { font-weight: 600; letter-spacing: 0.02em; }
+.seg.on .seg-tx { font-weight: 700; }
+
+/* PANIC: a dark red plate with the word in it; gold while held down */
+.button-bg { rx: 6px; stroke: rgba(242, 201, 204, 0.35); stroke-width: 1; }
+.button-sheen { display: none; }
+.button-tx { fill: var(--btn-text); font-weight: 700; letter-spacing: 0.14em; }
+
+/* knobs are filmstrips (baked arc + pointer), so these only matter if a look= knob is ever added */
+.knob-face { fill: var(--knob-face); }
+.knob-track { stroke: var(--knob-ring); }
+.knob-arc { stroke: var(--accent); }
+.knob-sheen { display: none; }
