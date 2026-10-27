@@ -2,7 +2,7 @@
 # MPC DJ FX - build + deploy to the MPC.
 #   vst/redeploy.sh                build -> deploy -> restart acvs
 #   vst/redeploy.sh --no-restart   build + deploy only (needs a re-insert, no MPC restart)
-#   DEVICE=192.168.178.x vst/redeploy.sh
+#   DEVICE=<mpc ip> vst/redeploy.sh
 #
 # First install/registration goes through tools/release.py + the packaged install.sh (stops MPC, backs
 # up MPC.settings, adds the plugin-list entry). This script is for UPDATES to an already-registered
@@ -10,18 +10,18 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"     # .../vst
-MV="${MPC_VST_PLUGINS:-/workspace/mpc-vst-plugins}"
-DEVICE="${DEVICE:-192.168.178.196}"
+MV="${MPC_VST_PLUGINS:-$(cd "$(dirname "$0")/../../mpc-vst-plugins" 2>/dev/null && pwd || echo "")}"
+[ -n "$MV" ] || { echo "set MPC_VST_PLUGINS to the mpc-vst-plugins checkout" >&2; exit 2; }
+# Translate a path under the workspace to the prefix the Docker daemon sees: set MPC_VST_WORKSPACE to the
+# directory holding this port and the framework, MPC_VST_HOST_ROOT to how the daemon sees it (both empty
+# when docker runs on this machine).
+WORKSPACE="${MPC_VST_WORKSPACE:-$(cd "$MV/.." 2>/dev/null && pwd)}"
+HOST_ROOT="${MPC_VST_HOST_ROOT:-}"
+host() { case "$1" in "$WORKSPACE"/*) printf '%s%s' "$HOST_ROOT" "${1#"$WORKSPACE"}" ;; *) printf '%s' "$1" ;; esac; }
+DEVICE="${DEVICE:?set DEVICE to the MPC IP address}"
 FOLDER="MPCDJ - VST - MPC DJ FX 2"
 SO="mpc_djfx2.so"
 
-host() {
-  case "$1" in
-    /workspace/*)                         echo "/mnt/SSD/Container/codex-agent${1#/workspace}" ;;
-    /truenas/SSD/Container/codex-agent/*) echo "/mnt/SSD/Container/codex-agent${1#/truenas/SSD/Container/codex-agent}" ;;
-    *)                                    echo "$1" ;;
-  esac
-}
 
 echo "== 1/2 build (skin + .so) =="
 "$(host "$MV")/tools/build_port.sh" "$(host "$HERE")/vst.json"

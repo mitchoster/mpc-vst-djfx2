@@ -30,8 +30,10 @@
 #define VALLEN 40
 #define VU_STEPS 81   /* 81 frames = 0.6 dB per step on a 48 dB scale (was 24 = 2.09 dB) */
 #define MET_STEPS 41
-#define ECH_COLS 16    /* columns in the composed ECHO display */
-#define ECH_STEPS 17   /* filmstrip frames per column */   /* per-page stage meters: 1.2 dB per step */
+#define EQ_COLS 32     /* columns in the composed EQ curve (Shapey-style stepped line) */
+#define EQ_STEPS 41    /* filmstrip frames per column: -24..+12 dB in 0.9 dB steps */
+#define EQ_DB_MIN (-24.0f)
+#define EQ_DB_MAX (12.0f)   /* per-page stage meters: 1.2 dB per step */
 #define VU_FLOOR_DB (-48.0f)
 
 static const char *const KEYS[] = {
@@ -47,9 +49,41 @@ static const char *const KEYS[] = {
     "output_gain", "limiter", "panic", "vu", "mix",
     "dly_tail", "verb_tail", "rep_act", "dly_show", "out_show",
     /* the composed ECHO display: one parameter per column, 17 filmstrip frames each */
-    "ech_00", "ech_01", "ech_02", "ech_03", "ech_04", "ech_05", "ech_06", "ech_07",
-    "ech_08", "ech_09", "ech_10", "ech_11", "ech_12", "ech_13", "ech_14", "ech_15",
-    "ech_on"
+    "eq_00",
+    "eq_01",
+    "eq_02",
+    "eq_03",
+    "eq_04",
+    "eq_05",
+    "eq_06",
+    "eq_07",
+    "eq_08",
+    "eq_09",
+    "eq_10",
+    "eq_11",
+    "eq_12",
+    "eq_13",
+    "eq_14",
+    "eq_15",
+    "eq_16",
+    "eq_17",
+    "eq_18",
+    "eq_19",
+    "eq_20",
+    "eq_21",
+    "eq_22",
+    "eq_23",
+    "eq_24",
+    "eq_25",
+    "eq_26",
+    "eq_27",
+    "eq_28",
+    "eq_29",
+    "eq_30",
+    "eq_31",
+    "eq_on",
+    "mix_show",
+    "vu_cal"
 };
 #define NKEYS ((int)(sizeof KEYS / sizeof KEYS[0]))
 _Static_assert(sizeof KEYS / sizeof KEYS[0] == NPARAMS,
@@ -71,8 +105,10 @@ enum {
     P_MAC_LO, P_MAC_MID, P_MAC_HI, P_MAC_LPF, P_MAC_GLITCH, P_MAC_VERB, P_MAC_FADE, P_MAC_FILL,
     P_OUTPUT_GAIN, P_LIMITER, P_PANIC, P_VU, P_MIX,
     P_DLY_TAIL, P_VERB_TAIL, P_REP_ACT, P_DLY_SHOW, P_OUT_SHOW,
-    P_ECH0,                                 /* P_ECH0 + i = the i-th ECHO column */
-    P_ECH_ON = P_ECH0 + 16                  /* the display's on/off switch (16 columns) */
+    P_EQ0,                                  /* P_EQ0 + i = the i-th EQ column */
+    P_EQ_ON = P_EQ0 + 32,                   /* the curve's on/off switch (32 columns) */
+    P_MIX_SHOW,                             /* read-only wet-mix text (mix is derived from the macros) */
+    P_VU_CAL                                /* VU trim in dB: which level reads full scale (DubTape2's trimmer) */
 };
 
 typedef struct {
@@ -94,9 +130,8 @@ typedef struct {
     int   met_step[3];      /* last reported stage steps: delay, verb, repeat (-1 = never) */
     int   met_tick;         /* samples since the last 20 Hz meter tick */
     unsigned long long pending;  /* meter keys waiting for mpc_engine_changed() */
-    float ech_env[ECH_COLS];     /* delay-level history, newest at [0] */
-    int   ech_step[ECH_COLS];
-    int   ech_tick;              /* samples since the last echo display tick */
+    int   eq_step[EQ_COLS];      /* last reported step per EQ column (-1 = never) */
+    int   eq_tick;               /* samples since the last curve tick */
     float vu_env;
     float dly_env, verb_env, rep_env;
     int   panic_cd;         /* panic debounce, in samples */
@@ -510,7 +545,7 @@ static void *create(const char *data_dir)
     c->out_gain = 1.0f;
     c->vu_step = -1;
     for (int k = 0; k < 3; k++) c->met_step[k] = -1;
-    for (int k = 0; k < ECH_COLS; k++) { c->ech_step[k] = -1; c->ech_env[k] = 0.0f; }
+    for (int k = 0; k < EQ_COLS; k++) c->eq_step[k] = -1;
     build_dsp(c);
     if (!dsp_ok(c)) { free_dsp(c); free(c); return NULL; }
     for (int i = 0; i < NKEYS; i++) {
@@ -563,6 +598,12 @@ static int get_param(void *inst, const char *key, char *buf, int buf_len)
     }
     /* live text (params.json "display": "string"): polled every 100 ms, no numeric value */
     if (!strcmp(key, "dly_show")) return get_param(c, "dly_time_display", buf, buf_len);
+    if (!strcmp(key, "mix_show")) {
+        /* `mix` is recomputed by apply_shared() from the eight macros, so a MIX *knob* would be overwritten on
+         * the next macro move; the skin shows it as a read-out instead (2026-10-27). */
+        snprintf(buf, (size_t)buf_len, "%d %% wet", (int)lrintf((c->mix < 0.0f ? 0.0f : (c->mix > 1.0f ? 1.0f : c->mix)) * 100.0f));
+        return 1;
+    }
     if (!strcmp(key, "out_show")) {
         const float db = 20.0f * log10f(c->vu_env + 1e-6f);
         snprintf(buf, (size_t)buf_len, "%+.1f dBFS", db);
@@ -682,6 +723,11 @@ static void process(void *inst, const int16_t *in_lr, int16_t *out_lr, int frame
      * memsets several MB (delay + repeat buffers are ~2.8 + ~1.8 MB, which would blow the block budget
      * on ARM). The output is silenced while flushing - that is what panic means. */
     if (c->panic_state) {
+        /* PANIC means silence now, so the meters must not keep a tail either: zero the envelopes and let the
+         * next 20 Hz tick publish 0 for every meter (-1 forces a fresh comparison). */
+        c->vu_env = c->dly_env = c->verb_env = c->rep_env = 0.0f;
+        c->vu_step = -1;
+        for (int k = 0; k < 3; k++) c->met_step[k] = -1;
         switch (c->panic_state) {
             case 1: iso_reset(c->iso); dub_filter_reset(c->djf); dub_filter_reset(c->vhf); flanger_reset(c->fl); dub_reverb_reset(c->rv); break;
             case 2: repeat_reset(c->rep); grain_reset(c->gr); break;
@@ -701,11 +747,18 @@ static void process(void *inst, const int16_t *in_lr, int16_t *out_lr, int frame
         out_lr[2 * i + 1] = (int16_t)b;
     }
 
-    /* master VU + stage meters: peak with a slow release */
-    c->vu_env   = pk      > c->vu_env   ? pk      : c->vu_env   * 0.9995f;
-    c->dly_env  = dly_pk  > c->dly_env  ? dly_pk  : c->dly_env  * 0.9995f;
-    c->verb_env = verb_pk > c->verb_env ? verb_pk : c->verb_env * 0.9995f;
-    c->rep_env  = rep_pk  > c->rep_env  ? rep_pk  : c->rep_env  * 0.9995f;
+    /* Meter ballistics (2026-10-27): the old 0.9995 per block was a ~40 s release, so the VU crawled back
+     * and the stage meters looked stuck at full. Now per meter: VU 0.4 s, repeat 0.5 s, delay 1.5 s and
+     * reverb 2.5 s — the tails keep a visible decay, the VU behaves like a meter. */
+    const float nf = (float)frames;
+    const float kV    = expf(-nf / (c->fs * 0.40f));
+    const float kRep  = expf(-nf / (c->fs * 0.50f));
+    const float kDly  = expf(-nf / (c->fs * 1.50f));
+    const float kVerb = expf(-nf / (c->fs * 2.50f));
+    c->vu_env   = pk      > c->vu_env   ? pk      : c->vu_env   * kV;
+    c->dly_env  = dly_pk  > c->dly_env  ? dly_pk  : c->dly_env  * kDly;
+    c->verb_env = verb_pk > c->verb_env ? verb_pk : c->verb_env * kVerb;
+    c->rep_env  = rep_pk  > c->rep_env  ? rep_pk  : c->rep_env  * kRep;
 
     /* 20 Hz: publish VU + the three stage meters. The host re-reads a value when display_rev changed
      * (DISPLAY_REV_NO_UPDATE), so one counter serves all four. */
@@ -718,9 +771,11 @@ static void process(void *inst, const int16_t *in_lr, int16_t *out_lr, int frame
             { c->verb_env, &c->met_step[1],  P_VERB_TAIL, MET_STEPS },
             { c->rep_env,  &c->met_step[2],  P_REP_ACT,   MET_STEPS },
         };
+        const float vu_trim = (float)atof(c->val[P_VU_CAL]);   /* DubTape2-style trimmer, in dB */
         for (int k = 0; k < 4; k++) {
             const int top = m[k].top;
-            int st = (int)lrintf((20.0f * log10f(m[k].env + 1e-6f) - VU_FLOOR_DB)
+            const float trim = (k == 0) ? vu_trim : 0.0f;      /* only the master VU is trimmed */
+            int st = (int)lrintf((20.0f * log10f(m[k].env + 1e-6f) + trim - VU_FLOOR_DB)
                                  / (0.0f - VU_FLOOR_DB) * (float)(top - 1));
             if (st < 0) st = 0;
             if (st >= top) st = top - 1;
@@ -729,39 +784,41 @@ static void process(void *inst, const int16_t *in_lr, int16_t *out_lr, int frame
                 snprintf(c->val[m[k].idx], VALLEN, "%d", st);
                 c->pending |= 1ull << m[k].idx;   /* wrapper reports it (engine.h hook), no 100 ms poll */
             }
-        /* composed ECHO display: shifted at 5 Hz (a slow waterfall; the screen thread of the MPC
-         * pays for every column that changes, so this is deliberately not the 20 Hz rate) */
-        c->ech_tick += (int)(c->fs / 20.0f);
-        if (atoi(c->val[P_ECH_ON]) == 0) {
-            /* display off: park every column at zero once and stop the history (no pushes, no repaints) */
-            for (int k = 0; k < ECH_COLS; k++) {
-                if (c->ech_step[k] != 0) {
-                    c->ech_step[k] = 0;
-                    snprintf(c->val[P_ECH0 + k], VALLEN, "0");
-                    c->pending |= 1ull << (P_ECH0 + k);
+        /* composed EQ curve: the isolator's and the DJ filter's magnitude response at 32 log-spaced
+         * frequencies, one filmstrip column each (the MPC has no drawing API - a curve is a row of
+         * widgets, the same trick Shapey and TinyFreaky use). 10 Hz: the curve only moves when a knob
+         * moves, and every changed column costs the screen thread a repaint. */
+        c->eq_tick += (int)(c->fs / 20.0f);
+        if (atoi(c->val[P_EQ_ON]) == 0) {
+            for (int k = 0; k < EQ_COLS; k++) {
+                if (c->eq_step[k] != 0) {
+                    c->eq_step[k] = 0;
+                    snprintf(c->val[P_EQ0 + k], VALLEN, "0");
+                    c->pending |= 1ull << (P_EQ0 + k);
                 }
-                c->ech_env[k] = 0.0f;
             }
-        } else if (c->ech_tick >= (int)(c->fs / 5.0f)) {
-            c->ech_tick = 0;
-            for (int k = ECH_COLS - 1; k > 0; k--) c->ech_env[k] = c->ech_env[k - 1];
-            c->ech_env[0] = dly_pk;
-            for (int k = 0; k < ECH_COLS; k++) {
-                int st = (int)lrintf((20.0f * log10f(c->ech_env[k] + 1e-6f) - VU_FLOOR_DB)
-                                     / (0.0f - VU_FLOOR_DB) * (float)(ECH_STEPS - 1));
+        } else if (c->eq_tick >= (int)(c->fs / 10.0f)) {
+            c->eq_tick = 0;
+            for (int k = 0; k < EQ_COLS; k++) {
+                const float t = (float)k / (float)(EQ_COLS - 1);
+                const float hz = 20.0f * powf(1000.0f, t);          /* 20 Hz .. 20 kHz */
+                float db = iso_response_db(c->iso, hz) + dub_filter_response_db(c->djf, hz);
+                if (db > EQ_DB_MAX) db = EQ_DB_MAX;
+                if (db < EQ_DB_MIN) db = EQ_DB_MIN;
+                int st = (int)lrintf((db - EQ_DB_MIN) / (EQ_DB_MAX - EQ_DB_MIN) * (float)(EQ_STEPS - 1));
                 if (st < 0) st = 0;
-                if (st >= ECH_STEPS) st = ECH_STEPS - 1;
-                if (st != c->ech_step[k]) {
-                    c->ech_step[k] = st;
-                    snprintf(c->val[P_ECH0 + k], VALLEN, "%d", st);
-                    c->pending |= 1ull << (P_ECH0 + k);
+                if (st >= EQ_STEPS) st = EQ_STEPS - 1;
+                if (st != c->eq_step[k]) {
+                    c->eq_step[k] = st;
+                    snprintf(c->val[P_EQ0 + k], VALLEN, "%d", st);
+                    c->pending |= 1ull << (P_EQ0 + k);
                 }
             }
         }
 
         /* live text is pushed too: nothing bumps display_rev any more, so a text param would otherwise
          * never be re-read (out_show follows the meter, dly_show the delay time/division/tempo) */
-        c->pending |= (1ull << P_OUT_SHOW) | (1ull << P_DLY_SHOW);
+        c->pending |= (1ull << P_OUT_SHOW) | (1ull << P_DLY_SHOW) | (1ull << P_MIX_SHOW);
         }
     }
     if (c->panic_cd > 0) { c->panic_cd -= frames; if (c->panic_cd < 0) c->panic_cd = 0; }

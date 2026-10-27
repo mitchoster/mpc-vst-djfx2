@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw
 W, H = 304, 40
 STEPS = 81
 VERTICAL = False
+FLAT = False
 BEZEL = 3
 TROUGH = (223, 216, 200, 255)   # paper trough (skin: ivory + ink, 2026-10-26)
 FRAME = (30, 42, 38, 255)       # ink bezel
@@ -39,7 +40,7 @@ def frame(step):
     d.rounded_rectangle([0, 0, W - 1, H - 1], radius=6, fill=TROUGH, outline=FRAME, width=2)
     inner_w, inner_h = W - 2 * BEZEL, H - 2 * BEZEL
     frac = step / (STEPS - 1)
-    c = blend(LOW, HIGH, max(0.0, (frac - 0.75) / 0.25))
+    c = LOW if FLAT else blend(LOW, HIGH, max(0.0, (frac - 0.75) / 0.25))
     if VERTICAL:
         # columns (the composed ECHO display): fill from the bottom up
         fill_h = round(frac * inner_h)
@@ -61,19 +62,21 @@ def frame(step):
 
 
 def main():
-    global W, H, STEPS, VERTICAL
+    global W, H, STEPS, VERTICAL, FLAT
     ap = argparse.ArgumentParser()
     ap.add_argument("-o", "--out", default="vst/art/vu")
     ap.add_argument("--steps", type=int, default=STEPS)
     ap.add_argument("--w", type=int, default=W)
     ap.add_argument("--h", type=int, default=H)
     ap.add_argument("--prefix", default="vu")
+    ap.add_argument("--flat", action="store_true", help="one colour for every frame (a curve, not a VU: no green->orange)")
     ap.add_argument("--vertical", action="store_true", help="fill from the bottom up (columns), not left to right")
     ap.add_argument("-s", "--strip", default="vst/art/vu_strip.png",
                     help="filmstrip output: STEPS frames of WxH stacked down, minimum first")
     a = ap.parse_args()
     STEPS, W, H = a.steps, a.w, a.h
     VERTICAL = a.vertical
+    FLAT = a.flat
     os.makedirs(a.out, exist_ok=True)
     frames = [frame(s) for s in range(STEPS)]
     for step, img in enumerate(frames):

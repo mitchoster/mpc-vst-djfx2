@@ -9,7 +9,7 @@
 # Run it BEFORE judging any change by ear on the device.
 set -euo pipefail
 
-DEVICE="${1:-${DEVICE:-192.168.178.196}}"
+DEVICE="${1:-${DEVICE:?set DEVICE to the MPC IP address (or pass it as the first argument)}}"
 SO="/sdcard/Synths/MPCDJ - VST - MPC DJ FX 2/mpc_djfx2.so"
 
 ssh -o BatchMode=yes -o StrictHostKeyChecking=no "root@$DEVICE" '

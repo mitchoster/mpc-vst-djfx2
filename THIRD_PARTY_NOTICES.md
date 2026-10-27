@@ -65,6 +65,12 @@ exists yet**: none of the GPL candidates above was taken, so the default build c
 
 ## Design references (no code, no assets copied)
 
+- **MagicStino — PulyTek** and **3dthc — Shapey 5-band EQ**: the two alternative skins ship with this
+  plugin and take their *composition* from these two: PulyTek's engraved faceplate / real VU / bay layout
+  and Shapey's display-on-top + parameter-card structure. No file was copied from either; both were
+  studied from their public releases.
+  <https://github.com/MagicStino/pulytek> · <https://github.com/3dthc/Shapey-MPC>
+
 - **MagicStino / Magic Tape Echo** — the look of the chassis (ivory plate, ink masthead) was modelled on
   this plugin's skin; only the visual idea was taken, no file from it is included.
   <https://github.com/MagicStino/Magic-Tape-Echo>

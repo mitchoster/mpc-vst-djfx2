@@ -54,6 +54,15 @@ static void bq_highpass(dub_biquad_t *b, float f0, float q, float fs) {
     b->a1 = (-2.0f * cw) / a0; b->a2 = (1.0f - alpha) / a0;
 }
 
+/* |H(e^jw)| of one biquad in dB, for the skin's EQ curve (2026-10-27). */
+static float bq_mag_db(const dub_biquad_t *b, float w) {
+    float c1 = cosf(w), s1 = sinf(w), c2 = cosf(2.0f * w), s2 = sinf(2.0f * w);
+    float nr = b->b0 + b->b1 * c1 + b->b2 * c2, ni = -(b->b1 * s1 + b->b2 * s2);
+    float dr = 1.0f + b->a1 * c1 + b->a2 * c2, di = -(b->a1 * s1 + b->a2 * s2);
+    float num = sqrtf(nr * nr + ni * ni), den = sqrtf(dr * dr + di * di);
+    return 20.0f * log10f((num > 1e-9f ? num : 1e-9f) / (den > 1e-9f ? den : 1e-9f));
+}
+
 static float bq_tick(dub_biquad_t *b, float x) {
     float y = b->b0 * x + b->s1;
     b->s1 = b->b1 * x - b->a1 * y + b->s2;
@@ -161,6 +170,15 @@ float dub_filter_tick(dub_filter_t *f, int ch, float x) {
     x = db_soft_clip(x * f->gain) * f->inv_gain;   /* drive = saturation knee; gain-compensated so it does not raise the feedback loop gain */
     if (f->ceil < 0.999f) x = db_soft_clip(x / f->ceil) * f->ceil;   /* feedback ceiling */
     return x;
+}
+
+float dub_filter_response_db(const dub_filter_t *f, float hz)
+{
+    if (!f || !f->enable) return 0.0f;
+    float w = DUB_FILTER_TWO_PI * hz / f->fs;
+    float db = bq_mag_db(&f->hp[0], w);
+    if (!f->hp_only) db += bq_mag_db(&f->lp[0], w);
+    return db;
 }
 
 void dub_filter_process(dub_filter_t *f, float *l, float *r, int n) {

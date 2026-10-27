@@ -135,6 +135,25 @@ def vu_window(img, d, box):
     d.text((x0 + 12, y0 + 6), "LEVEL", font=f, fill=(150, 158, 150))
 
 
+def eq_grid(d, box):
+    """Plot grid for the EQ page: dB lines, log frequency lines, both labelled (baked)."""
+    x0, y0, x1, y1 = box[0], box[1] - Y_OFF, box[2], box[3] - Y_OFF
+    f = font("reg", 11)
+    for db in (12, 6, 0, -6, -12, -18, -24):
+        y = y0 + (12.0 - db) / 36.0 * (y1 - y0)
+        strong = db == 0
+        d.line([(x0, y), (x1, y)], fill=(RULE if strong else lerp(RULE, PAPER, 0.45)),
+               width=2 if strong else 1)
+        d.text((x0 - 34, y - 7), "%+d" % db, font=f, fill=INK_SOFT)
+    for hz, label in ((20, "20"), (50, "50"), (100, "100"), (200, "200"), (500, "500"),
+                      (1000, "1k"), (2000, "2k"), (5000, "5k"), (10000, "10k"), (20000, "20k")):
+        t = math.log10(hz / 20.0) / 3.0
+        x = x0 + t * (x1 - x0)
+        d.line([(x, y0), (x, y1)], fill=lerp(RULE, PAPER, 0.55), width=1)
+        wlab = d.textlength(label, font=f)
+        d.text((x - wlab / 2, y1 + 8), label, font=f, fill=INK_SOFT)
+
+
 def footer(d, page):
     f = font("reg", 12)
     d.text((46, H - 20), "MPC DJ FX 2", font=f, fill=INK_SOFT)
@@ -170,6 +189,10 @@ PAGES = {
         ((46, 250, 1234, 424), "flanger"),
         ((46, 470, 1234, 700), "grain  \u00b7  the original glitch stage"),
     ], None),
+    "eq": ("EQ", "ISOLATOR + DJ FILTER  /  32 BANDS  /  10 HZ", [
+        ((46, 226, 1234, 466), ""),
+        ((46, 512, 1234, 700), "isolator  \u00b7  dj filter"),
+    ], None),
     "echo": ("ECHO", "DELAY HISTORY  /  16 COLUMNS  /  5 HZ", [
         ((46, 236, 1234, 300), "delay history"),
     ], None),
@@ -192,6 +215,8 @@ def draw_page(page, out_dir):
         section(d, box, cap)
     if vu:
         vu_window(img, d, vu)
+    if page == "eq":
+        eq_grid(d, (86, 236, 1254, 460))
     footer(d, page)
     path = os.path.join(out_dir, "bg_%s.png" % page)
     img.save(path, optimize=True)

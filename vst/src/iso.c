@@ -33,6 +33,16 @@ static float gain_db(float db)
 
 static void bq_reset(bq_t *f) { f->z1 = f->z2 = 0.0f; }
 
+/* |H(e^jw)| of one biquad, in dB (2026-10-27, for the EQ curve display). */
+static float bq_mag_db(const bq_t *f, float w)
+{
+    const float c1 = cosf(w), s1 = sinf(w), c2 = cosf(2.0f * w), s2 = sinf(2.0f * w);
+    const float nr = f->b0 + f->b1 * c1 + f->b2 * c2, ni = -(f->b1 * s1 + f->b2 * s2);
+    const float dr = 1.0f + f->a1 * c1 + f->a2 * c2, di = -(f->a1 * s1 + f->a2 * s2);
+    const float num = sqrtf(nr * nr + ni * ni), den = sqrtf(dr * dr + di * di);
+    return 20.0f * log10f((num > 1e-9f ? num : 1e-9f) / (den > 1e-9f ? den : 1e-9f));
+}
+
 static inline float bq_tick(bq_t *f, float x)   /* transposed direct form II */
 {
     const float y = f->b0 * x + f->z1;
@@ -170,6 +180,17 @@ void iso_set_sample_rate(iso_t *s, float fs)
     iso_set_lo_x(s, s->lo_x);
     iso_set_hi_x(s, s->hi_x);
     iso_reset(s);
+}
+
+float iso_response_db(const iso_t *s, float hz)
+{
+    if (!s) return 0.0f;
+    const float w = 2.0f * ISO_PI * hz / s->fs;
+    float db = 0.0f;
+    for (int k = 0; k < ISO_SECT; k++) db += bq_mag_db(&s->low[0][k], w);
+    db += bq_mag_db(&s->mid[0], w);
+    for (int k = 0; k < ISO_SECT; k++) db += bq_mag_db(&s->high[0][k], w);
+    return db;
 }
 
 void iso_process(iso_t *s, float *l, float *r, int n)

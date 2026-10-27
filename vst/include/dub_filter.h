@@ -30,6 +30,9 @@ void dub_filter_set_limit(dub_filter_t *f, float v);   /* 0..1 feedback ceiling 
 /* One sample for channel ch (0 or 1). Returns x unchanged when disabled. */
 float dub_filter_tick(dub_filter_t *f, int ch, float x);
 
+/* Magnitude response (HPF and LPF) at one frequency, in dB; 0 when disabled (used by the EQ curve). */
+float dub_filter_response_db(const dub_filter_t *f, float hz);
+
 /* In-place block helper (calls tick per channel). */
 void dub_filter_process(dub_filter_t *f, float *l, float *r, int n);
 

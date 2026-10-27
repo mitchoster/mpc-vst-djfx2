@@ -22,6 +22,9 @@ void iso_set_hi_x(iso_t *s, float hz);    /* mid/high crossover */
 
 void iso_set_sample_rate(iso_t *s, float fs);
 
+/* Magnitude response at one frequency, in dB (used by the skin's EQ curve; no audio effect). */
+float iso_response_db(const iso_t *s, float hz);
+
 /* In-place stereo block. */
 void iso_process(iso_t *s, float *l, float *r, int n);
 

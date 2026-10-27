@@ -21,7 +21,8 @@ import json
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))          # .../vst
-MV = os.environ.get("MPC_VST_PLUGINS", "/workspace/mpc-vst-plugins")
+MV = os.environ.get("MPC_VST_PLUGINS") or os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                     "..", "..", "mpc-vst-plugins")
 
 # name -> parameter overrides (everything else stays at params.json's default)
 PRESETS = [

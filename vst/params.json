@@ -455,140 +455,284 @@
       "default": 0
     },
     {
-      "key": "ech_00",
-      "name": "ECHO 00",
-      "default": 0,
+      "key": "eq_00",
+      "name": "EQ 00",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_01",
-      "name": "ECHO 01",
-      "default": 0,
+      "key": "eq_01",
+      "name": "EQ 01",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_02",
-      "name": "ECHO 02",
-      "default": 0,
+      "key": "eq_02",
+      "name": "EQ 02",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_03",
-      "name": "ECHO 03",
-      "default": 0,
+      "key": "eq_03",
+      "name": "EQ 03",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_04",
-      "name": "ECHO 04",
-      "default": 0,
+      "key": "eq_04",
+      "name": "EQ 04",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_05",
-      "name": "ECHO 05",
-      "default": 0,
+      "key": "eq_05",
+      "name": "EQ 05",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_06",
-      "name": "ECHO 06",
-      "default": 0,
+      "key": "eq_06",
+      "name": "EQ 06",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_07",
-      "name": "ECHO 07",
-      "default": 0,
+      "key": "eq_07",
+      "name": "EQ 07",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_08",
-      "name": "ECHO 08",
-      "default": 0,
+      "key": "eq_08",
+      "name": "EQ 08",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_09",
-      "name": "ECHO 09",
-      "default": 0,
+      "key": "eq_09",
+      "name": "EQ 09",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_10",
-      "name": "ECHO 10",
-      "default": 0,
+      "key": "eq_10",
+      "name": "EQ 10",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_11",
-      "name": "ECHO 11",
-      "default": 0,
+      "key": "eq_11",
+      "name": "EQ 11",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_12",
-      "name": "ECHO 12",
-      "default": 0,
+      "key": "eq_12",
+      "name": "EQ 12",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_13",
-      "name": "ECHO 13",
-      "default": 0,
+      "key": "eq_13",
+      "name": "EQ 13",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_14",
-      "name": "ECHO 14",
-      "default": 0,
+      "key": "eq_14",
+      "name": "EQ 14",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_15",
-      "name": "ECHO 15",
-      "default": 0,
+      "key": "eq_15",
+      "name": "EQ 15",
       "min": 0,
-      "max": 16,
+      "max": 40,
+      "default": 0,
       "display": "int"
     },
     {
-      "key": "ech_on",
-      "name": "ECHO DISPLAY",
-      "default": 0,
+      "key": "eq_16",
+      "name": "EQ 16",
       "min": 0,
-      "max": 1,
+      "max": 40,
+      "default": 0,
       "display": "int"
+    },
+    {
+      "key": "eq_17",
+      "name": "EQ 17",
+      "min": 0,
+      "max": 40,
+      "default": 0,
+      "display": "int"
+    },
+    {
+      "key": "eq_18",
+      "name": "EQ 18",
+      "min": 0,
+      "max": 40,
+      "default": 0,
+      "display": "int"
+    },
+    {
+      "key": "eq_19",
+      "name": "EQ 19",
+      "min": 0,
+      "max": 40,
+      "default": 0,
+      "display": "int"
+    },
+    {
+      "key": "eq_20",
+      "name": "EQ 20",
+      "min": 0,
+      "max": 40,
+      "default": 0,
+      "display": "int"
+    },
+    {
+      "key": "eq_21",
+      "name": "EQ 21",
+      "min": 0,
+      "max": 40,
+      "default": 0,
+      "display": "int"
+    },
+    {
+      "key": "eq_22",
+      "name": "EQ 22",
+      "min": 0,
+      "max": 40,
+      "default": 0,
+      "display": "int"
+    },
+    {
+      "key": "eq_23",
+      "name": "EQ 23",
+      "min": 0,
+      "max": 40,
+      "default": 0,
+      "display": "int"
+    },
+    {
+      "key": "eq_24",
+      "name": "EQ 24",
+      "min": 0,
+      "max": 40,
+      "default": 0,
+      "display": "int"
+    },
+    {
+      "key": "eq_25",
+      "name": "EQ 25",
+      "min": 0,
+      "max": 40,
+      "default": 0,
+      "display": "int"
+    },
+    {
+      "key": "eq_26",
+      "name": "EQ 26",
+      "min": 0,
+      "max": 40,
+      "default": 0,
+      "display": "int"
+    },
+    {
+      "key": "eq_27",
+      "name": "EQ 27",
+      "min": 0,
+      "max": 40,
+      "default": 0,
+      "display": "int"
+    },
+    {
+      "key": "eq_28",
+      "name": "EQ 28",
+      "min": 0,
+      "max": 40,
+      "default": 0,
+      "display": "int"
+    },
+    {
+      "key": "eq_29",
+      "name": "EQ 29",
+      "min": 0,
+      "max": 40,
+      "default": 0,
+      "display": "int"
+    },
+    {
+      "key": "eq_30",
+      "name": "EQ 30",
+      "min": 0,
+      "max": 40,
+      "default": 0,
+      "display": "int"
+    },
+    {
+      "key": "eq_31",
+      "name": "EQ 31",
+      "min": 0,
+      "max": 40,
+      "default": 0,
+      "display": "int"
+    },
+    {
+      "key": "eq_on",
+      "name": "EQ CURVE",
+      "options": [
+        "Off",
+        "On"
+      ],
+      "default": "On"
+    },
+    {
+      "key": "mix_show",
+      "name": "MIX",
+      "display": "string",
+      "default": 0
+    },
+    {
+      "key": "vu_cal",
+      "name": "VU CAL",
+      "min": -12,
+      "max": 12,
+      "default": 0,
+      "display": "int",
+      "unit": "dB"
     }
   ],
   "sections": [
