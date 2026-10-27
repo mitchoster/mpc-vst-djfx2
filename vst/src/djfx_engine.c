@@ -29,7 +29,9 @@
 #define MAXFRAMES 128
 #define VALLEN 40
 #define VU_STEPS 81   /* 81 frames = 0.6 dB per step on a 48 dB scale (was 24 = 2.09 dB) */
-#define MET_STEPS 41   /* per-page stage meters: 1.2 dB per step */
+#define MET_STEPS 41
+#define ECH_COLS 16    /* columns in the composed ECHO display */
+#define ECH_STEPS 17   /* filmstrip frames per column */   /* per-page stage meters: 1.2 dB per step */
 #define VU_FLOOR_DB (-48.0f)
 
 static const char *const KEYS[] = {
@@ -43,7 +45,10 @@ static const char *const KEYS[] = {
     "gr_rate", "gr_time", "gr_spray", "gr_mix",
     "mac_lo", "mac_mid", "mac_hi", "mac_lpf", "mac_glitch", "mac_verb", "mac_fade", "mac_fill",
     "output_gain", "limiter", "panic", "vu", "mix",
-    "dly_tail", "verb_tail", "rep_act", "dly_show", "out_show"
+    "dly_tail", "verb_tail", "rep_act", "dly_show", "out_show",
+    /* the composed ECHO display: one parameter per column, 17 filmstrip frames each */
+    "ech_00", "ech_01", "ech_02", "ech_03", "ech_04", "ech_05", "ech_06", "ech_07",
+    "ech_08", "ech_09", "ech_10", "ech_11", "ech_12", "ech_13", "ech_14", "ech_15"
 };
 #define NKEYS ((int)(sizeof KEYS / sizeof KEYS[0]))
 _Static_assert(sizeof KEYS / sizeof KEYS[0] == NPARAMS,
@@ -64,7 +69,8 @@ enum {
     P_GR_RATE, P_GR_TIME, P_GR_SPRAY, P_GR_MIX,
     P_MAC_LO, P_MAC_MID, P_MAC_HI, P_MAC_LPF, P_MAC_GLITCH, P_MAC_VERB, P_MAC_FADE, P_MAC_FILL,
     P_OUTPUT_GAIN, P_LIMITER, P_PANIC, P_VU, P_MIX,
-    P_DLY_TAIL, P_VERB_TAIL, P_REP_ACT, P_DLY_SHOW, P_OUT_SHOW
+    P_DLY_TAIL, P_VERB_TAIL, P_REP_ACT, P_DLY_SHOW, P_OUT_SHOW,
+    P_ECH0                                  /* P_ECH0 + i = the i-th ECHO column */
 };
 
 typedef struct {
@@ -86,6 +92,9 @@ typedef struct {
     int   met_step[3];      /* last reported stage steps: delay, verb, repeat (-1 = never) */
     int   met_tick;         /* samples since the last 20 Hz meter tick */
     unsigned long long pending;  /* meter keys waiting for mpc_engine_changed() */
+    float ech_env[ECH_COLS];     /* delay-level history, newest at [0] */
+    int   ech_step[ECH_COLS];
+    int   ech_tick;              /* samples since the last echo display tick */
     float vu_env;
     float dly_env, verb_env, rep_env;
     int   panic_cd;         /* panic debounce, in samples */
@@ -499,6 +508,7 @@ static void *create(const char *data_dir)
     c->out_gain = 1.0f;
     c->vu_step = -1;
     for (int k = 0; k < 3; k++) c->met_step[k] = -1;
+    for (int k = 0; k < ECH_COLS; k++) { c->ech_step[k] = -1; c->ech_env[k] = 0.0f; }
     build_dsp(c);
     if (!dsp_ok(c)) { free_dsp(c); free(c); return NULL; }
     for (int i = 0; i < NKEYS; i++) {
@@ -717,6 +727,26 @@ static void process(void *inst, const int16_t *in_lr, int16_t *out_lr, int frame
                 snprintf(c->val[m[k].idx], VALLEN, "%d", st);
                 c->pending |= 1ull << m[k].idx;   /* wrapper reports it (engine.h hook), no 100 ms poll */
             }
+        /* composed ECHO display: shifted at 5 Hz (a slow waterfall; the screen thread of the MPC
+         * pays for every column that changes, so this is deliberately not the 20 Hz rate) */
+        c->ech_tick += (int)(c->fs / 20.0f);
+        if (c->ech_tick >= (int)(c->fs / 5.0f)) {
+            c->ech_tick = 0;
+            for (int k = ECH_COLS - 1; k > 0; k--) c->ech_env[k] = c->ech_env[k - 1];
+            c->ech_env[0] = dly_pk;
+            for (int k = 0; k < ECH_COLS; k++) {
+                int st = (int)lrintf((20.0f * log10f(c->ech_env[k] + 1e-6f) - VU_FLOOR_DB)
+                                     / (0.0f - VU_FLOOR_DB) * (float)(ECH_STEPS - 1));
+                if (st < 0) st = 0;
+                if (st >= ECH_STEPS) st = ECH_STEPS - 1;
+                if (st != c->ech_step[k]) {
+                    c->ech_step[k] = st;
+                    snprintf(c->val[P_ECH0 + k], VALLEN, "%d", st);
+                    c->pending |= 1ull << (P_ECH0 + k);
+                }
+            }
+        }
+
         /* live text is pushed too: nothing bumps display_rev any more, so a text param would otherwise
          * never be re-read (out_show follows the meter, dly_show the delay time/division/tempo) */
         c->pending |= (1ull << P_OUT_SHOW) | (1ull << P_DLY_SHOW);

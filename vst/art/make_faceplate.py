@@ -170,6 +170,9 @@ PAGES = {
         ((46, 250, 1234, 424), "flanger"),
         ((46, 470, 1234, 700), "grain  \u00b7  the original glitch stage"),
     ], None),
+    "echo": ("ECHO", "DELAY HISTORY  /  16 COLUMNS  /  5 HZ", [
+        ((46, 236, 1234, 300), "delay history"),
+    ], None),
     "setup": ("SETUP", "CROSSOVERS  /  LIMITER  /  SYNC", [
         ((46, 242, 1234, 430), "isolator crossovers  \u00b7  limiter"),
         ((46, 442, 1234, 700), "delay sync"),

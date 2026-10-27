@@ -19,6 +19,7 @@ from PIL import Image, ImageDraw
 
 W, H = 304, 40
 STEPS = 81
+VERTICAL = False
 BEZEL = 3
 TROUGH = (223, 216, 200, 255)   # paper trough (skin: ivory + ink, 2026-10-26)
 FRAME = (30, 42, 38, 255)       # ink bezel
@@ -36,32 +37,43 @@ def frame(step):
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     d.rounded_rectangle([0, 0, W - 1, H - 1], radius=6, fill=TROUGH, outline=FRAME, width=2)
-    inner_w = W - 2 * BEZEL
+    inner_w, inner_h = W - 2 * BEZEL, H - 2 * BEZEL
     frac = step / (STEPS - 1)
-    fill_w = round(frac * inner_w)
-    if fill_w > 0:
-        c = blend(LOW, HIGH, max(0.0, (frac - 0.75) / 0.25))
-        d.rounded_rectangle([BEZEL, BEZEL, BEZEL + fill_w, H - 1 - BEZEL], radius=4,
-                            fill=(c[0], c[1], c[2], ALPHA))
-    # segment ticks over the trough so the steps read
-    for i in range(1, 8):
-        x = BEZEL + inner_w * i / 8
-        d.line([(x, H - 1 - BEZEL - 6), (x, H - 1 - BEZEL)], fill=TICK, width=2)
+    c = blend(LOW, HIGH, max(0.0, (frac - 0.75) / 0.25))
+    if VERTICAL:
+        # columns (the composed ECHO display): fill from the bottom up
+        fill_h = round(frac * inner_h)
+        if fill_h > 0:
+            d.rounded_rectangle([BEZEL, H - 1 - BEZEL - fill_h, W - 1 - BEZEL, H - 1 - BEZEL], radius=4,
+                                fill=(c[0], c[1], c[2], ALPHA))
+        for i in range(1, 8):
+            y = H - 1 - BEZEL - inner_h * i / 8
+            d.line([(BEZEL + 3, y), (BEZEL + 9, y)], fill=TICK, width=2)
+    else:
+        fill_w = round(frac * inner_w)
+        if fill_w > 0:
+            d.rounded_rectangle([BEZEL, BEZEL, BEZEL + fill_w, H - 1 - BEZEL], radius=4,
+                                fill=(c[0], c[1], c[2], ALPHA))
+        for i in range(1, 8):
+            x = BEZEL + inner_w * i / 8
+            d.line([(x, H - 1 - BEZEL - 6), (x, H - 1 - BEZEL)], fill=TICK, width=2)
     return img
 
 
 def main():
-    global W, H, STEPS
+    global W, H, STEPS, VERTICAL
     ap = argparse.ArgumentParser()
     ap.add_argument("-o", "--out", default="vst/art/vu")
     ap.add_argument("--steps", type=int, default=STEPS)
     ap.add_argument("--w", type=int, default=W)
     ap.add_argument("--h", type=int, default=H)
     ap.add_argument("--prefix", default="vu")
+    ap.add_argument("--vertical", action="store_true", help="fill from the bottom up (columns), not left to right")
     ap.add_argument("-s", "--strip", default="vst/art/vu_strip.png",
                     help="filmstrip output: STEPS frames of WxH stacked down, minimum first")
     a = ap.parse_args()
     STEPS, W, H = a.steps, a.w, a.h
+    VERTICAL = a.vertical
     os.makedirs(a.out, exist_ok=True)
     frames = [frame(s) for s in range(STEPS)]
     for step, img in enumerate(frames):
