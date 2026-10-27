@@ -61,7 +61,7 @@ PAGES = {
         ],
     },
     "setup": {
-        "tag": "SETUP",
+        "tag": "MACROS",
         "file": "bg_setup.png",
         "rail": "division",
         "cards": [
