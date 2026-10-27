@@ -717,6 +717,9 @@ static void process(void *inst, const int16_t *in_lr, int16_t *out_lr, int frame
                 snprintf(c->val[m[k].idx], VALLEN, "%d", st);
                 c->pending |= 1ull << m[k].idx;   /* wrapper reports it (engine.h hook), no 100 ms poll */
             }
+        /* live text is pushed too: nothing bumps display_rev any more, so a text param would otherwise
+         * never be re-read (out_show follows the meter, dly_show the delay time/division/tempo) */
+        c->pending |= (1ull << P_OUT_SHOW) | (1ull << P_DLY_SHOW);
         }
     }
     if (c->panic_cd > 0) { c->panic_cd -= frames; if (c->panic_cd < 0) c->panic_cd = 0; }
