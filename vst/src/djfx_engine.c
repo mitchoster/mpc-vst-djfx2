@@ -83,7 +83,8 @@ static const char *const KEYS[] = {
     "eq_31",
     "eq_on",
     "mix_show",
-    "vu_cal"
+    "vu_cal",
+    "ui"                                    /* interface selector: Studio / Classic / Rack (skin only) */
 };
 #define NKEYS ((int)(sizeof KEYS / sizeof KEYS[0]))
 _Static_assert(sizeof KEYS / sizeof KEYS[0] == NPARAMS,
@@ -108,7 +109,8 @@ enum {
     P_EQ0,                                  /* P_EQ0 + i = the i-th EQ column */
     P_EQ_ON = P_EQ0 + 32,                   /* the curve's on/off switch (32 columns) */
     P_MIX_SHOW,                             /* read-only wet-mix text (mix is derived from the macros) */
-    P_VU_CAL                                /* VU trim in dB: which level reads full scale (DubTape2's trimmer) */
+    P_VU_CAL,                               /* VU trim in dB: which level reads full scale (DubTape2's trimmer) */
+    P_UI                                    /* interface selector, read by the skin loader below */
 };
 
 typedef struct {
@@ -137,6 +139,7 @@ typedef struct {
     int   panic_cd;         /* panic debounce, in samples */
     int   panic_state;      /* panic flush staged across blocks (0 = idle, 1..3 = stage) */
     char  val[NKEYS][VALLEN];
+    char  dir[600];               /* this plugin's folder (from MODULE_SUBDIR), for the interface switch */
     float l[MAXFRAMES], r[MAXFRAMES], w1[MAXFRAMES], w2[MAXFRAMES];
 } ctx_t;
 
@@ -535,11 +538,80 @@ static int dsp_ok(const ctx_t *c)
     return c->iso && c->djf && c->vhf && c->rep && c->delay && c->rv && c->fl && c->gr && c->lim;
 }
 
+
+/* ---- interface switch (2026-10-28) ------------------------------------------------------------
+ * The three interfaces ship inside the plugin folder as "Plugin Skins/<name>/". They differ in exactly
+ * the files MPC reads when a plugin is inserted (TUI.json and the Q-Link banks); the artwork of each one
+ * lives in its own subfolder, so switching copies two small JSON files and rewrites no image. An
+ * instance that is already running therefore keeps everything it has loaded, and MPC - which binds a
+ * skin at insert and has no reload call - shows the new interface on the next insert.
+ */
+static const char *const SKIN_DIRS[] = { "studio", "classic", "rack" };
+#define NSKINS ((int)(sizeof SKIN_DIRS / sizeof SKIN_DIRS[0]))
+
+static int copy_file(const char *from, const char *to)
+{
+    FILE *in = fopen(from, "rb");
+    if (!in) return 0;
+    FILE *out = fopen(to, "wb");
+    if (!out) { fclose(in); return 0; }
+    char buf[16384];
+    size_t n;
+    int ok = 1;
+    while ((n = fread(buf, 1, sizeof buf, in)) > 0)
+        if (fwrite(buf, 1, n, out) != n) { ok = 0; break; }
+    if (ferror(in)) ok = 0;
+    fclose(in);
+    if (fclose(out) != 0) ok = 0;
+    return ok;
+}
+
+static void skin_apply(ctx_t *c, int idx)
+{
+    if (!c->dir[0] || idx < 0 || idx >= NSKINS) return;
+    static const char *const FILES[] = { "TUI.json", "Q-Links.json", "Q-Links - 8by1.json" };
+    char src[800], dst[760], tmp[800];
+    int done = 0;
+    for (int k = 0; k < (int)(sizeof FILES / sizeof FILES[0]); k++) {
+        snprintf(src, sizeof src, "%s/Plugin Skins/%s/%s", c->dir, SKIN_DIRS[idx], FILES[k]);
+        FILE *probe = fopen(src, "rb");
+        if (!probe) continue;              /* this interface has no such file */
+        fclose(probe);
+        snprintf(dst, sizeof dst, "%s/Plugin Skins/%s", c->dir, FILES[k]);
+        snprintf(tmp, sizeof tmp, "%s.tmp", dst);
+        if (copy_file(src, tmp) && rename(tmp, dst) == 0) done = 1;
+        else remove(tmp);
+    }
+    if (!done) return;
+    snprintf(dst, sizeof dst, "%s/Plugin Skins/ui.txt", c->dir);
+    FILE *f = fopen(dst, "wb");
+    if (f) { fprintf(f, "%s\n", SKIN_DIRS[idx]); fclose(f); }
+}
+
+/* the stored choice is what is on disk: a project or a preset must not rewrite another interface */
+static void skin_sync(ctx_t *c)
+{
+    if (!c->dir[0]) return;
+    char p[760], line[32] = { 0 };
+    snprintf(p, sizeof p, "%s/Plugin Skins/ui.txt", c->dir);
+    FILE *f = fopen(p, "rb");
+    if (!f) return;
+    if (!fgets(line, sizeof line, f)) line[0] = 0;
+    fclose(f);
+    line[strcspn(line, "\r\n")] = 0;
+    for (int k = 0; k < NSKINS; k++)
+        if (!strcmp(line, SKIN_DIRS[k])) { snprintf(c->val[P_UI], VALLEN, "%d", k); return; }
+}
+
 static void *create(const char *data_dir)
 {
-    (void)data_dir;
     ctx_t *c = (ctx_t *)calloc(1, sizeof *c);
     if (!c) return NULL;
+    if (data_dir && data_dir[0]) {
+        snprintf(c->dir, sizeof c->dir, "%s", data_dir);
+        size_t n = strlen(c->dir);          /* MODULE_SUBDIR "." leaves a trailing slash: drop it */
+        while (n > 1 && c->dir[n - 1] == '/') c->dir[--n] = 0;
+    }
     c->fs = 44100.0f;
     c->mix = 0.35f;
     c->out_gain = 1.0f;
@@ -553,6 +625,7 @@ static void *create(const char *data_dir)
         snprintf(c->val[i], VALLEN, "%g", (double)raw);
         apply(c, i);
     }
+    skin_sync(c);
     return c;
 }
 
@@ -573,9 +646,14 @@ static void set_param(void *inst, const char *key, const char *val)
 {
     ctx_t *c = inst;
     if (!c) return;
-    if (!strcmp(key, "state")) { set_state(c, val); return; }
+    if (!strcmp(key, "state")) { set_state(c, val); skin_sync(c); return; }
     if (!strcmp(key, "sample_rate")) { engine_set_sample_rate(c, (float)atof(val)); return; }
     if (!strcmp(key, "reset")) { engine_reset(c); return; }
+    if (!strcmp(key, "ui")) {               /* switching rewrites two small JSON files: keep it a discrete action */
+        snprintf(c->val[P_UI], VALLEN, "%s", val);
+        skin_apply(c, (int)lrintf((float)atof(val)));
+        return;
+    }
     if (!strcmp(key, "lfo_bpm")) { c->bpm = (float)atof(val); repeat_set_bpm(c->rep, c->bpm); apply(c, P_DLY_TIME); return; }
     const int i = key_idx(key);
     if (i < 0) return;

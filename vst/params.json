@@ -733,6 +733,17 @@
       "default": 0,
       "display": "int",
       "unit": "dB"
+    },
+    {
+      "key": "ui",
+      "name": "INTERFACE",
+      "options": [
+        "Studio",
+        "Classic",
+        "Rack"
+      ],
+      "default": 0,
+      "help": "Switches the plugin's interface. The three skins ship with the plugin; the new one appears on the next insert."
     }
   ],
   "sections": [
