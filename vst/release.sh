@@ -21,7 +21,7 @@ HOST_ROOT="${MPC_VST_HOST_ROOT:-}"
 host() { case "$1" in "$WORKSPACE"/*) printf '%s%s' "$HOST_ROOT" "${1#"$WORKSPACE"}" ;; *) printf '%s' "$1" ;; esac; }
 FOLDER="LarryDaimond - VST - MPC DJ FX 2"
 SO="mpc_djfx2.so"
-VERSION="3.0.0"
+VERSION="3.1.2"
 ABOUT="One-slot DJ insert: 3-band isolator, DJ filter, beat repeat, delay, reverb, flanger, grain delay (the original rack's Glitch stage) and a true-peak limiter, driven by the eight macros measured from Lenny Kiser's DJ-FX rack."
 
 

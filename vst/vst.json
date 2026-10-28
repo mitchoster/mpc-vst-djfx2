@@ -2,7 +2,7 @@
   "name": "MPC DJ FX 2",
   "vendor": "LarryDaimond",
   "uid": "DjF2",
-  "version": 2000,
+  "version": 3120,
   "so": "mpc_djfx2.so",
   "params": "params.json",
   "layout": "layout.conf",
