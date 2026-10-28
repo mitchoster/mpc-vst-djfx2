@@ -109,7 +109,7 @@ def header(img, d, title, sub):
     tracked(d, (48, 68), sub, f_sub, (168, 176, 168), 2.6)
     # right-hand mark
     f_mark = font("semi", 14)
-    label = "MPCDJ"
+    label = "LarryDaimond"
     wlab = sum(d.textlength(c, font=f_mark) + 2.2 for c in label) - 2.2
     tracked(d, (W - 46 - wlab, 40), label, f_mark, (168, 176, 168), 2.2)
 

@@ -9,7 +9,7 @@
 #   sh ui-set.sh --use <name>         # switch to a saved interface
 #
 # The plugin folder is found next to this script, so copy the script into the plugin folder
-# ("/sdcard/Synths/MPCDJ - VST - MPC DJ FX 2") or set PLUGIN_DIR.
+# ("/sdcard/Synths/LarryDaimond - VST - MPC DJ FX 2") or set PLUGIN_DIR.
 #
 # What it does: saves the current "Plugin Skins" under /data/djfx2-skins/<name>, then replaces
 # it. The .so and the parameter set are not touched, so the plugin keeps working across skins.

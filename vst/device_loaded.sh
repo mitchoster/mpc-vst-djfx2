@@ -10,7 +10,7 @@
 set -euo pipefail
 
 DEVICE="${1:-${DEVICE:?set DEVICE to the MPC IP address (or pass it as the first argument)}}"
-SO="/sdcard/Synths/MPCDJ - VST - MPC DJ FX 2/mpc_djfx2.so"
+SO="/sdcard/Synths/LarryDaimond - VST - MPC DJ FX 2/mpc_djfx2.so"
 
 ssh -o BatchMode=yes -o StrictHostKeyChecking=no "root@$DEVICE" '
 SO="'"$SO"'"

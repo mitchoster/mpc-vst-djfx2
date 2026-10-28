@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import look as L  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SKIN = os.path.join(HERE, "..", "build", "skin", "MPCDJ - VST - MPC DJ FX 2", "Plugin Skins")
+SKIN = os.path.join(HERE, "..", "build", "skin", "LarryDaimond - VST - MPC DJ FX 2", "Plugin Skins")
 
 # parameter -> (0..1 position on the knob scale, the text MPC would print)
 SAMPLES = {

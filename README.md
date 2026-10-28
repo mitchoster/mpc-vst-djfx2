@@ -50,7 +50,7 @@ Rendered from `vst/layout.conf` offline, no device needed (`vst/preview.sh`):
 
 1. Unzip `MPC-DJ-FX-2-<version>-mpc-armv7.zip`.
 2. Copy the folder to the device and run `sh install.sh` as root (it stops MPC, backs up
-   `MPC.settings`, installs into `/sdcard/Synths/MPCDJ - VST - MPC DJ FX 2/` and registers the plugin).
+   `MPC.settings`, installs into `/sdcard/Synths/LarryDaimond - VST - MPC DJ FX 2/` and registers the plugin).
 3. Start MPC, add the plugin as an insert effect.
 
 `install.sh` needs root (SSH) on a modded unit. The plugin folder is self-contained and can also be

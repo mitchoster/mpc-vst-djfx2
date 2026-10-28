@@ -19,7 +19,7 @@ WORKSPACE="${MPC_VST_WORKSPACE:-$(cd "$MV/.." 2>/dev/null && pwd)}"
 HOST_ROOT="${MPC_VST_HOST_ROOT:-}"
 host() { case "$1" in "$WORKSPACE"/*) printf '%s%s' "$HOST_ROOT" "${1#"$WORKSPACE"}" ;; *) printf '%s' "$1" ;; esac; }
 DEVICE="${DEVICE:?set DEVICE to the MPC IP address}"
-FOLDER="MPCDJ - VST - MPC DJ FX 2"
+FOLDER="LarryDaimond - VST - MPC DJ FX 2"
 SO="mpc_djfx2.so"
 
 

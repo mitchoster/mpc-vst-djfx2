@@ -17,7 +17,7 @@ Layout produced (inside an existing skin folder):
       rack/ ...
 
 Usage:
-    python3 make_skinset.py -o "portable/MPCDJ - VST - MPC DJ FX 2/Plugin Skins" \\
+    python3 make_skinset.py -o "portable/LarryDaimond - VST - MPC DJ FX 2/Plugin Skins" \\
         studio=<built skin dir> classic=<built skin dir> rack=<built skin dir> [--active studio]
 
 Every argument after -o is `name=directory`. The directory is a built skin folder (the one holding

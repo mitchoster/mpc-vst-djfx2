@@ -233,7 +233,7 @@ def masthead(img, title, sub, page):
             d.rectangle([x, 43, x + wlab - 2, 45], fill=AMBER + (230,))
         x -= 26
     f_brand = font("semi", 8)
-    tracked(d, (1252, 58), "MPCDJ  \u00b7  DJ FX 2", f_brand, (120, 128, 134, 210), tracking=2.6, anchor="right")
+    tracked(d, (1252, 58), "LarryDaimond  \u00b7  DJ FX 2", f_brand, (120, 128, 134, 210), tracking=2.6, anchor="right")
     img = over(img, lay)
     img = rule(img, 28, 88, W - 28, col=RULE, a=120)
     return rule(img, 28, 91, W - 28, col=RULE_DIM, a=120)
@@ -243,7 +243,7 @@ def footer(img, page):
     lay = layer()
     d = ImageDraw.Draw(lay)
     f = font("semi", 8)
-    tracked(d, (32, 614), "MPCDJ  \u00b7  DJ FX 2  \u00b7  V2", f, (108, 115, 121, 190), tracking=2.4)
+    tracked(d, (32, 614), "LarryDaimond  \u00b7  DJ FX 2  \u00b7  V2", f, (108, 115, 121, 190), tracking=2.4)
     tracked(d, (W - 32, 614), "PAGE %d / 3" % (page + 1), f, (108, 115, 121, 190), tracking=2.4, anchor="right")
     img = over(img, lay)
     return rule(img, 28, 604, W - 28, col=RULE_DIM, a=90)
@@ -513,7 +513,7 @@ def vu_dial(value):
     tracked(d, (w / 2, 94), "VU", font("bold", 22), (44, 42, 34), tracking=3.4, anchor="center")
     tracked(d, (w / 2, 110), "PEAK METER  \u00b7  0 dBFS", font("semi", 7), (104, 95, 76),
             tracking=1.2, anchor="center")
-    tracked(d, (w / 2, 128), "MPCDJ", font("semi", 6), (126, 117, 96), tracking=1.8, anchor="center")
+    tracked(d, (w / 2, 128), "LarryDaimond", font("semi", 6), (126, 117, 96), tracking=1.8, anchor="center")
 
     # needle
     a = math.radians(-sweep / 2 + sweep * value)
