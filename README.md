@@ -22,6 +22,16 @@ that effect: one insert slot, seven stages in series, 48 parameters, all reachab
 | FLANGE | flanger + grain | rate, depth, feedback, mix — grain rate, time, spray, mix |
 | SETUP | routing | isolator crossovers, limiter, delay sync + division |
 
+The other six pages:
+
+| | | |
+| --- | --- | --- |
+| ![DJ page](docs/ui-preview/page_1.png) | ![beat repeat page](docs/ui-preview/page_2.png) | ![delay page](docs/ui-preview/page_3.png) |
+| DJ filter + isolator | beat repeat | delay |
+| ![reverb page](docs/ui-preview/page_4.png) | ![flanger and grain page](docs/ui-preview/page_5.png) | ![setup page](docs/ui-preview/page_6.png) |
+| reverb | flanger + grain | routing |
+
+
 The macros are the point: one hardware knob each, mapped onto a curated set of parameters, so a set can
 be played without looking at the screen. `GLITCH` drives the grain stage (the original rack's *Glitch*),
 `AUTO-FILL` drives the beat repeat, `FADE` the moving band-pass, `LPF` the DJ filter.
