@@ -22,14 +22,15 @@ that effect: one insert slot, seven stages in series, 48 parameters, all reachab
 | FLANGE | flanger + grain | rate, depth, feedback, mix — grain rate, time, spray, mix |
 | SETUP | routing | isolator crossovers, limiter, delay sync + division |
 
-The other six pages:
+The Rack interface, which the screenshots above use — three pages:
 
 | | | |
 | --- | --- | --- |
-| ![DJ page](docs/ui-preview/page_1.png) | ![beat repeat page](docs/ui-preview/page_2.png) | ![delay page](docs/ui-preview/page_3.png) |
-| DJ filter + isolator | beat repeat | delay |
-| ![reverb page](docs/ui-preview/page_4.png) | ![flanger and grain page](docs/ui-preview/page_5.png) | ![setup page](docs/ui-preview/page_6.png) |
-| reverb | flanger + grain | routing |
+| ![PERFORM page](docs/ui-preview/rack_0.png) | ![FX page](docs/ui-preview/rack_1.png) | ![TONE page](docs/ui-preview/rack_2.png) |
+| PERFORM: macros, DJ filter, master | FX: repeat, delay, reverb, flanger, grain | TONE: isolator, crossovers, 32-band curve |
+
+The Studio and Classic interfaces ship in the same plugin and are switched from the INTERFACE
+control; their renders are `docs/ui-preview/page_*.png`.
 
 
 The macros are the point: one hardware knob each, mapped onto a curated set of parameters, so a set can
