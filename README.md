@@ -5,7 +5,7 @@ isolator, DJ filter, beat repeat, delay, reverb, through-zero flanger, a grain d
 limiter — plus a macro layer that reproduces the eight macros of Lenny Kiser's DJ-FX rack, measured in
 Ableton Live 12.4.
 
-![MPC DJ FX 2 — macros page](docs/ui-preview/page_0.png)
+![MPC DJ FX 2 — PERFORM page, Rack interface](docs/ui-preview/rack_0.png)
 
 ## What it is
 
