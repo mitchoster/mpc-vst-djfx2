@@ -14,4 +14,13 @@ HOST_ROOT="${MPC_VST_HOST_ROOT:-}"
 host() { case "$1" in "$WORKSPACE"/*) printf '%s%s' "$HOST_ROOT" "${1#"$WORKSPACE"}" ;; *) printf '%s' "$1" ;; esac; }
 
 
-"$(host "$MV")/tools/test_port.sh" "$(host "$HERE")/vst.json" "$@"
+MPC_VST_PLUGINS="$(host "$MV")" "$(host "$MV")/tools/test_port.sh" "$(host "$HERE")/vst.json" "$@"
+
+echo "== companion feed (HTTP /state + the page) =="
+MPC_VST_PLUGINS="$MV" "$HERE/tests/companion.sh"
+
+echo "== companion lifetime across dlclose (the 2026-11-01 device crash) =="
+"$HERE/tests/dlclose.sh"
+
+echo "== companion page logic (headless) =="
+"$HERE/tests/page.sh"

@@ -15,6 +15,7 @@
 #include <math.h>
 
 #include "engine.h"
+#include "dsp/companion_c.h"   /* the companion page: attach/detach, the command ring, the snapshot */
 #include "params.h"      /* generated: defines + PARAMS[] (NPARAMS, HAS_LFO_BPM, ...) */
 #include "dsp_common.h"
 #include "iso.h"
@@ -125,6 +126,7 @@ typedef struct {
     limiter_t    *lim;
     float fs;
     float bpm;              /* host tempo (HAS_LFO_BPM) */
+    int   bpm_seen;         /* 1 once the host has reported a tempo at all */
     float mix;
     float out_gain;         /* linear */
     unsigned display_rev;   /* HAS_DISPLAY_REV */
@@ -141,6 +143,8 @@ typedef struct {
     char  val[NKEYS][VALLEN];
     char  dir[600];               /* this plugin's folder (from MODULE_SUBDIR), for the interface switch */
     float l[MAXFRAMES], r[MAXFRAMES], w1[MAXFRAMES], w2[MAXFRAMES];
+    int slot;             /* companion page slot (-1 = server off), see companion_c.h */
+    djfx_snap snap;       /* filled at the 20 Hz tick and published; never read back */
 } ctx_t;
 
 /* 12 sync divisions of a beat, in beats */
@@ -626,6 +630,7 @@ static void *create(const char *data_dir)
         apply(c, i);
     }
     skin_sync(c);
+    c->slot = djfx_companion_attach();   /* companion page; -1 when DJF2_HTTP=0 or no slot free */
     return c;
 }
 
@@ -633,6 +638,10 @@ static void destroy(void *inst)
 {
     ctx_t *c = inst;
     if (!c) return;
+    /* Before the memory goes: the page must never read a freed instance, and the last detach
+     * stops AND joins the listener thread (a thread parked in poll() after dlclose() takes the
+     * device down - see companion.cpp). */
+    djfx_companion_detach(c->slot);
     free_dsp(c);
     free(c);
 }
@@ -654,7 +663,7 @@ static void set_param(void *inst, const char *key, const char *val)
         skin_apply(c, (int)lrintf((float)atof(val)));
         return;
     }
-    if (!strcmp(key, "lfo_bpm")) { c->bpm = (float)atof(val); repeat_set_bpm(c->rep, c->bpm); apply(c, P_DLY_TIME); return; }
+    if (!strcmp(key, "lfo_bpm")) { c->bpm = (float)atof(val); c->bpm_seen = 1; repeat_set_bpm(c->rep, c->bpm); apply(c, P_DLY_TIME); return; }
     const int i = key_idx(key);
     if (i < 0) return;
     snprintf(c->val[i], VALLEN, "%s", val);
@@ -745,10 +754,90 @@ static void render(void *inst, int16_t *out_lr, int frames)
     memset(out_lr, 0, (size_t)frames * 2 * sizeof(int16_t));
 }
 
+/* The page's whole view of the machine, rebuilt at the 20 Hz tick from the engine's own
+ * values - never a second table, so what the page shows is what the DSP holds. */
+#define SNAP_F(field, key) s->field = (float)atof(c->val[key])
+#define SNAP_I(field, key) s->field = atoi(c->val[key])
+static void companion_fill(ctx_t *c)
+{
+    djfx_snap *s = &c->snap;
+    s->vu = c->vu_env > 1.0f ? 1.0f : c->vu_env;
+    s->peak = s->vu;
+    s->delay_ms = effective_time_ms(c);
+    s->bpm = c->bpm;
+    s->bpm_seen = c->bpm_seen;
+    s->mix = c->mix;
+    s->rep_env = c->rep_env > 1.0f ? 1.0f : c->rep_env;
+    s->dly_env = c->dly_env > 1.0f ? 1.0f : c->dly_env;
+    s->verb_env = c->verb_env > 1.0f ? 1.0f : c->verb_env;
+    SNAP_F(iso_lo, P_ISO_LO);
+    SNAP_F(iso_mid, P_ISO_MID);
+    SNAP_F(iso_hi, P_ISO_HI);
+    SNAP_F(iso_lo_x, P_ISO_LO_X);
+    SNAP_F(iso_hi_x, P_ISO_HI_X);
+    SNAP_F(dj_filter, P_DJ_FILTER);
+    SNAP_F(dj_reso, P_DJ_RESO);
+    SNAP_F(rep_gate, P_REP_GATE);
+    SNAP_F(rep_chance, P_REP_CHANCE);
+    SNAP_F(rep_mix, P_REP_MIX);
+    SNAP_F(dly_time, P_DLY_TIME);
+    SNAP_F(dly_fbk, P_DLY_FBK);
+    SNAP_F(dly_tone, P_DLY_TONE);
+    SNAP_F(dly_mix, P_DLY_MIX);
+    SNAP_F(verb_amount, P_VERB_AMOUNT);
+    SNAP_F(verb_decay, P_VERB_DECAY);
+    SNAP_F(verb_damp, P_VERB_DAMP);
+    SNAP_F(verb_predelay, P_VERB_PREDELAY);
+    SNAP_F(hp_hz, P_VHF_HZ);
+    SNAP_F(hp_reso, P_VHF_RESO);
+    SNAP_F(fl_rate, P_FL_RATE);
+    SNAP_F(fl_depth, P_FL_DEPTH);
+    SNAP_F(fl_fbk, P_FL_FBK);
+    SNAP_F(fl_mix, P_FL_MIX);
+    SNAP_F(gr_rate, P_GR_RATE);
+    SNAP_F(gr_time, P_GR_TIME);
+    SNAP_F(gr_spray, P_GR_SPRAY);
+    SNAP_F(gr_mix, P_GR_MIX);
+    SNAP_F(mac_lo, P_MAC_LO);
+    SNAP_F(mac_mid, P_MAC_MID);
+    SNAP_F(mac_hi, P_MAC_HI);
+    SNAP_F(mac_lpf, P_MAC_LPF);
+    SNAP_F(mac_glitch, P_MAC_GLITCH);
+    SNAP_F(mac_verb, P_MAC_VERB);
+    SNAP_F(mac_fade, P_MAC_FADE);
+    SNAP_F(mac_fill, P_MAC_FILL);
+    SNAP_F(output_gain, P_OUTPUT_GAIN);
+    SNAP_I(rep_mode, P_REP_MODE);
+    SNAP_I(rep_count, P_REP_COUNT);
+    SNAP_I(fill_mode, P_FILL_MODE);
+    SNAP_I(dly_sync, P_DLY_SYNC);
+    SNAP_I(dly_div, P_DLY_DIV);
+    SNAP_I(dly_pingpong, P_DLY_PINGPONG);
+    SNAP_I(verb_mode, P_VERB_MODE);
+    SNAP_I(limiter, P_LIMITER);
+#undef SNAP_F
+#undef SNAP_I
+}
+
 static void process(void *inst, const int16_t *in_lr, int16_t *out_lr, int frames)
 {
     ctx_t *c = inst;
     if (!c || frames <= 0) return;
+
+    /* Companion page: whatever arrived since the last block. The page only queues; the change
+ * happens here because the DSP state belongs to the render loop. Through set_param, so a macro
+ * fans out exactly as it does when the on-device knob moves. */
+    {
+        int idx[8];
+        float val[8];
+        const int n = djfx_companion_take(c->slot, idx, val, 8);
+        for (int i = 0; i < n; i++) {
+            if (idx[i] < 0 || idx[i] >= NKEYS) continue;
+            char vs[24];
+            snprintf(vs, sizeof vs, "%.6g", (double)val[i]);
+            set_param(c, KEYS[idx[i]], vs);
+        }
+    }
     if (frames > MAXFRAMES) frames = MAXFRAMES;
 
     for (int i = 0; i < frames; i++) {
@@ -862,6 +951,11 @@ static void process(void *inst, const int16_t *in_lr, int16_t *out_lr, int frame
                 snprintf(c->val[m[k].idx], VALLEN, "%d", st);
                 c->pending |= 1ull << m[k].idx;   /* wrapper reports it (engine.h hook), no 100 ms poll */
             }
+        /* and the page: the same numbers, plus the settings that explain them. This block is
+         * already the 20 Hz tick, a decade faster than the browser polls. */
+        companion_fill(c);
+        djfx_companion_publish(c->slot, &c->snap);
+
         /* composed EQ curve: the isolator's and the DJ filter's magnitude response at 32 log-spaced
          * frequencies, one filmstrip column each (the MPC has no drawing API - a curve is a row of
          * widgets, the same trick Shapey and TinyFreaky use). 10 Hz: the curve only moves when a knob
@@ -941,4 +1035,11 @@ int mpc_engine_changed(void *inst, char *key, int len)
 
 static const mpc_engine_t ENGINE = { create, destroy, midi, set_param, get_param, render, process,
                                      NULL /* song_pos: HAS_SONG_POS unset */ };
-const mpc_engine_t *mpc_engine(void) { return &ENGINE; }
+const mpc_engine_t *mpc_engine(void)
+{
+    /* The companion server validates writes against this port's own key table, so it can refuse
+     * an unknown key with 400 instead of guessing what the page meant. Idempotent: the wrapper
+     * asks for the engine once per load, but nothing breaks if it asks twice. */
+    djfx_companion_register_keys(KEYS, NKEYS);
+    return &ENGINE;
+}

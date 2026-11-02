@@ -17,6 +17,7 @@
   "build": {
     "root": ".",
     "sources": [
+      "src/dsp/companion.cpp",
       "src/djfx_engine.c",
       "src/iso.c",
       "src/dub_delay.c",
@@ -31,7 +32,8 @@
       "-Iinclude"
     ],
     "libs": [
-      "-lm"
+      "-lm",
+      "-lpthread"
     ]
   },
   "art": "html",

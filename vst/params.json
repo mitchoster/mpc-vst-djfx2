@@ -742,7 +742,7 @@
         "Classic",
         "Rack"
       ],
-      "default": 0,
+      "default": 2,
       "help": "Switches the plugin's interface. The three skins ship with the plugin; the new one appears on the next insert."
     }
   ],

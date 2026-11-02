@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0c09">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon.svg">
+<title>MPC DJ FX 2 — companion</title>
+<style>
+  html,body{margin:0;height:100%;background:#080a07;overflow:hidden;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+  canvas{display:block;width:100vw;height:100vh;touch-action:none}
+  #bar{position:fixed;left:0;right:0;bottom:0;box-sizing:border-box;display:flex;
+    justify-content:space-between;align-items:center;gap:10px;
+    padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+    font:600 12px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    letter-spacing:.14em;text-transform:uppercase;color:#8d947f;pointer-events:none;
+    transition:opacity .5s}
+  #bar.hide{opacity:0}
+  #bar b{color:#2fbf63}
+  button{pointer-events:auto;background:rgba(201,162,39,.12);border:1px solid rgba(201,162,39,.5);
+    color:#e9e4d2;border-radius:9px;padding:8px 14px;font:inherit;letter-spacing:inherit;
+    text-transform:inherit}
+  button:active{background:rgba(201,162,39,.35)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="bar"><span id="link"><b>LIVE</b> <span id="host"></span><br>
+<span id="pair" style="opacity:.72;font-size:11px"></span></span>
+<span><button id="fs">Fullscreen</button></span></div>
+<script>
+(() => {
+'use strict';
+/* MPC DJ FX 2 — companion panel.
+ *
+ * Three faces of a three-head tape echo: the tape bay with its heads and the mode grid, the
+ * tape's own character, and the macros. Everything is drawn from /state, motion is integrated
+ * here so a 7 Hz poll still looks continuous, and every control writes back through
+ * POST /set — the plugin applies it on the audio thread.
+ *
+ * The drawing never invents machine state: head positions come from the three head times the
+ * plugin publishes, head activity from the mode table's own option names.
+ */
+var cv = document.getElementById('c'), ctx = cv.getContext('2d');
+var bar = document.getElementById('bar'), link = document.getElementById('link');
+var hostEl = document.getElementById('host');
+var W = 0, H = 0, DPR = 1, portrait = false;
+
+/* ---- palette ------------------------------------------------------------- */
+var CREAM = '#e9e4d2', DIM = '#9aa08f', FAINT = '#5d6555';
+var GOLD = '#c9a227', GOLD_D = '#7d6420';
+var GREEN = '#1f8f4a', GREEN_HI = '#2fbf63', GREEN_DEEP = '#0a140d';
+var RED = '#d6382a', AMBER = '#e0a02b';
+var TAPE = '#3b2a17', TAPE_HI = '#6b4f2c';
+
+/* ---- what the device sends ------------------------------------------------ */
+var st = {
+  vu: 0, peak: 0, delay_ms: 400, bpm: 0, mix: 0.35,
+  iso_lo: 0, iso_mid: 0, iso_hi: 0, iso_lo_x: 250, iso_hi_x: 2500,
+  dj_filter: 0, dj_reso: 0.2,
+  rep_mode: 0, rep_gate: 0.25, rep_chance: 1, rep_count: 4, rep_mix: 0, fill_mode: 0,
+  dly_time: 400, dly_sync: 0, dly_div: 3, dly_fbk: 0.4, dly_tone: 0.5, dly_mix: 1, dly_pingpong: 0,
+  verb_mode: 0, verb_amount: 0, verb_decay: 0.5, verb_damp: 0.5, verb_predelay: 20,
+  hp_hz: 20, hp_reso: 0,
+  fl_rate: 0.2, fl_depth: 0.4, fl_fbk: 0.3, fl_mix: 0,
+  gr_rate: 20, gr_time: 80, gr_spray: 0.2, gr_mix: 0,
+  mac_lo: 0, mac_mid: 0, mac_hi: 0, mac_lpf: 0, mac_glitch: 0, mac_verb: 0, mac_fade: 0, mac_fill: 0,
+  output_gain: 0, limiter: 1,
+  rep_env: 0, dly_env: 0, verb_env: 0,
+  instance: 0, count: 0, active: 0, age_ms: 0
+};
+var MODES = ['OFF', '1/2', '1/4', '1/8', '1/8T', '1/6', '1/16', '1/32'];
+var DIVS = ['1/1', '1/2', '1/2D', '1/4', '1/4D', '1/8', '1/8D', '1/8T', '1/16', '1/16D', '1/16T', '1/32'];
+/* display names only (cosmetic); which heads a mode uses comes from the plugin's own table */
+var linkOk = false, lastHeard = 0;
+var pairEl = document.getElementById('pair');
+var pairText = '';   /* what the bar shows a second phone: this plugin's own address */
+
+/* /state carries `url` once the server publishes it; until then, the address this page was
+ * opened with is the honest answer. Never guessed, never read from the network. */
+function setPair() {
+  var u = (st && typeof st.url === 'string' && st.url) ? st.url : location.host;
+  pairText = u;
+  if (pairEl) pairEl.textContent = 'PAIR ' + u;
+}
+
+/* control state */
+var hits = [];              /* interactive regions of the last frame */
+var drag = null;            /* {key, startY, startV, x, y} while a knob is being turned */
+var note = '', noteUntil = 0;
+var env = [];               /* the last seconds of level */
+var envAt = 0;
+
+function poll() {
+  fetch('/state', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+    st = j; linkOk = true; lastHeard = performance.now();
+    link.className = '';
+    hostEl.textContent = location.host;
+    setPair();
+  }).catch(function () { linkOk = false; });
+}
+setInterval(poll, 140); setPair(); poll();
+
+/* ---- writes: the page drives the machine ----------------------------------
+ * One tiny endpoint: POST /set?k=<param>&v=<value>. The header a cross-site form cannot set
+ * without a preflight this server never grants, so another web page cannot move the tape. */
+function post(key, val) {
+  fetch('/set?k=' + encodeURIComponent(key) + '&v=' + encodeURIComponent(val),
+        { method: 'POST', headers: { 'X-DJF2': '1' } })
+    .then(function (r) { if (!r.ok) r.text().then(function (t) { note = t.trim(); noteUntil = performance.now() + 2500; }); })
+    .catch(function () { note = 'no link'; noteUntil = performance.now() + 2500; });
+}
+
+/* tape texture: fixed pseudo-random specks/gaps in tape-normalised coordinates, so wear looks
+ * baked into the tape and scrolls with it instead of flickering */
+function lcg(seed) { var s2 = seed >>> 0; return function () { s2 = (s2 * 1664525 + 1013904223) >>> 0; return s2 / 4294967296; }; }
+var rnd = lcg(0x7A9E);
+var SPECKS = [], GAPS = [], NBARS = [];
+for (var si = 0; si < 90; si++) SPECKS.push([rnd(), rnd(), 0.25 + rnd() * 0.75]);
+for (var gi = 0; gi < 9; gi++) GAPS.push([rnd(), 0.004 + rnd() * 0.012]);
+for (var ni = 0; ni < 70; ni++) NBARS.push([rnd(), rnd()]);
+
+/* ---- motion state --------------------------------------------------------- */
+var pulses = [], spawn = 0, reelAngle = 0, wowPhase = 0, vuPos = 0, vuVel = 0;
+var tapeRun = 0;            /* 0..1, the motor's actual speed after inertia */
+var loudAt = 0;             /* the last time there was signal or a finger on the panel */
+var ripples = [];
+var prevFlash = [0, 0, 0];
+
+function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+function fmt(v) { return (Math.round(v * 100) / 100).toFixed(2).replace(/0$/, ''); }
+function sign1(v) { return v > 0 ? '+' + Math.round(v * 100) / 100 : '' + Math.round(v * 100) / 100; }
+
+/* ---- drawing helpers ------------------------------------------------------ */
+function rr(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function screw(x, y, r) {
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832);
+  ctx.fillStyle = '#1b1e18'; ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = GOLD_D; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - r * 0.6, y); ctx.lineTo(x + r * 0.6, y);
+  ctx.strokeStyle = '#0a0b08'; ctx.lineWidth = Math.max(1, r * 0.35); ctx.stroke();
+}
+function label(txt, x, y, size, colour, align, spacing) {
+  ctx.font = '600 ' + Math.round(size) + 'px ui-monospace,SFMono-Regular,Menlo,monospace';
+  ctx.fillStyle = colour; ctx.textAlign = align || 'center'; ctx.textBaseline = 'alphabetic';
+  if (!spacing) { ctx.fillText(txt, x, y); return; }
+  var w = 0, i;
+  for (i = 0; i < txt.length; i++) w += ctx.measureText(txt[i]).width + spacing;
+  w -= spacing;
+  var cx = align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
+  for (i = 0; i < txt.length; i++) { ctx.fillText(txt[i], cx, y); cx += ctx.measureText(txt[i]).width + spacing; }
+}
+function labelWidth(txt, size, spacing) {
+  ctx.font = '600 ' + Math.round(size) + 'px ui-monospace,SFMono-Regular,Menlo,monospace';
+  var w2 = 0;
+  for (var i = 0; i < txt.length; i++) w2 += ctx.measureText(txt[i]).width + (spacing || 0);
+  return w2 - (spacing || 0);
+}
+function text(txt, x, y, size, colour, align) {
+  ctx.font = '600 ' + Math.round(size) + 'px ui-monospace,SFMono-Regular,Menlo,monospace';
+  ctx.fillStyle = colour; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(txt, x, y);
+}
+
+function drawReel(cx, cy, r, angle, tint) {
+  var g = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.35, r * 0.1, cx, cy, r);
+  g.addColorStop(0, '#2b2f26'); g.addColorStop(1, '#14170f');
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.2832); ctx.fillStyle = g; ctx.fill();
+  ctx.lineWidth = Math.max(1, r * 0.06); ctx.strokeStyle = '#0a0b08'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.86, 0, 6.2832);
+  ctx.lineWidth = r * 0.22; ctx.strokeStyle = tint; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.75, 0, 6.2832);
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.stroke();
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle);
+  for (var i = 0; i < 3; i++) {
+    ctx.beginPath(); ctx.rotate(2.0944);
+    ctx.moveTo(0, -r * 0.18); ctx.lineTo(0, -r * 0.62);
+    ctx.lineWidth = Math.max(1.5, r * 0.11); ctx.lineCap = 'round';
+    ctx.strokeStyle = '#3c4235'; ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.19, 0, 6.2832); ctx.fillStyle = '#0c0e0a'; ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = GOLD_D; ctx.stroke();
+  ctx.restore();
+}
+
+/* a knob: skirt with knurling, cap, pointer. pos 0..1 -> -135..+135 degrees.
+ * `map` turns the drag position into the value the plugin expects (ms, -1..1, ...). */
+function knob(cx, cy, r, pos, name, shown, key, map) {
+  pos = clamp(pos, 0, 1);
+  var a = (-135 + pos * 270) * Math.PI / 180;
+  ctx.beginPath(); ctx.arc(cx, cy + r * 0.1, r, 0, 6.2832);
+  ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fill();
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(a);
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.2832);
+  var g = ctx.createLinearGradient(-r, -r, r, r);
+  g.addColorStop(0, '#3a3f33'); g.addColorStop(0.5, '#22261d'); g.addColorStop(1, '#141710');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.lineWidth = Math.max(1, r * 0.05); ctx.strokeStyle = '#0a0b08'; ctx.stroke();
+  for (var i = 0; i < 24; i++) {
+    var t = (i / 24) * 6.2832;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(t) * r * 0.78, Math.sin(t) * r * 0.78);
+    ctx.lineTo(Math.cos(t) * r * 0.98, Math.sin(t) * r * 0.98);
+    ctx.lineWidth = Math.max(0.6, r * 0.03); ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.stroke();
+  }
+  ctx.restore();
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.72, 0, 6.2832);
+  var cg = ctx.createRadialGradient(cx - r * 0.25, cy - r * 0.3, r * 0.05, cx, cy, r * 0.72);
+  cg.addColorStop(0, '#f0ead8'); cg.addColorStop(0.45, '#c9c2ab'); cg.addColorStop(1, '#8c8570');
+  ctx.fillStyle = cg; ctx.fill();
+  ctx.lineWidth = Math.max(1, r * 0.04); ctx.strokeStyle = '#5c5747'; ctx.stroke();
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(a);
+  ctx.beginPath(); ctx.moveTo(0, -r * 0.12); ctx.lineTo(0, -r * 0.66);
+  ctx.lineWidth = Math.max(1.5, r * 0.09); ctx.lineCap = 'round';
+  ctx.strokeStyle = '#14160f'; ctx.stroke();
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 1.14, -Math.PI * 0.75, -Math.PI * 0.75 + Math.PI * 1.5);
+  ctx.lineWidth = Math.max(1.5, r * 0.06); ctx.strokeStyle = 'rgba(201,162,39,.25)'; ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 1.14, -Math.PI * 0.75, -Math.PI * 0.75 + Math.PI * 1.5 * pos);
+  ctx.lineWidth = Math.max(1.5, r * 0.07); ctx.strokeStyle = GOLD; ctx.stroke();
+  if (name) label(name, cx, cy + r * 1.42, r * 0.34, DIM, 'center', r * 0.06);
+  if (shown !== undefined) text(shown, cx, cy + r * 1.92, r * 0.36, CREAM, 'center');
+  if (key) hits.push({ t: 'knob', key: key, name: name, x: cx, y: cy, r: r * 1.3, v: pos, map: map });
+}
+
+/* a rounded lamp that glows when on */
+function lamp(x, y, r, on, colour, name, key, toggle) {
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832);
+  ctx.fillStyle = on ? colour : '#14170f';
+  if (on) { ctx.shadowColor = colour; ctx.shadowBlur = r * 3.2; }
+  ctx.fill(); ctx.shadowBlur = 0;
+  ctx.lineWidth = Math.max(1, r * 0.28); ctx.strokeStyle = on ? 'rgba(255,255,255,.35)' : '#2a2e24'; ctx.stroke();
+  if (name) label(name, x, y + r * 2.3, r * 0.95, on ? CREAM : FAINT, 'center', r * 0.1);
+  if (key) hits.push({ t: 'toggle', key: key, x: x, y: y, r: r * 2.2, on: on ? 1 : 0, toggle: toggle });
+}
+
+/* a segmented switch: label above, one cell per option, the live one lit. A tap sends its index. */
+function seg(x, y, w, h, label2, opts, cur, key, base, pitch) {
+  var b = base || 0;
+  label(label2, x, y - h * 0.18, h * 0.34, DIM, 'left', h * 0.05);
+  var n = opts.length, cw = w / n;
+  /* A hit box equal to the drawn cell is not a touch target on a phone: the finger lands
+   * outside and the gesture becomes a page swipe. Grow it vertically, never past the next row. */
+  var th = Math.min(Math.max(h, 34), Math.max(h, (pitch || h + 8) - 4));
+  var ty = y + (h - th) / 2;
+  for (var i = 0; i < n; i++) {
+    var on = Math.round(cur) === (i + b);
+    rr(x + i * cw + 1.5, y, cw - 3, h, Math.min(5, h * 0.22));
+    ctx.fillStyle = on ? 'rgba(31,143,74,.60)' : 'rgba(10,14,10,.72)'; ctx.fill();
+    ctx.lineWidth = on ? 1.5 : 1;
+    ctx.strokeStyle = on ? GREEN_HI : 'rgba(201,162,39,.28)'; ctx.stroke();
+    text(opts[i], x + i * cw + cw / 2, y + h / 2, Math.min(h * 0.42, cw * 0.3),
+         on ? CREAM : FAINT, 'center');
+    hits.push({ t: 'seg', key: key, i: i + b, name: opts[i], x: x + i * cw + 1, y: ty, w: cw - 2, h: th });
+  }
+}
+
+/* ---- layout --------------------------------------------------------------- */
+function layout() {
+  var m = Math.min(W, H) * 0.035;
+  var L = { m: m, portrait: portrait };
+  var footerH = Math.max(46, Math.min(W, H) * 0.115);
+  L.footer = { x: m, y: H - m * 0.9 - footerH, w: W - m * 2, h: footerH };
+  if (!portrait) {
+    L.title = { x: m, y: m * 0.7, w: W - m * 2, h: H * 0.14 };
+    var bodyY = L.title.y + L.title.h + m * 0.35;
+    var bodyH = L.footer.y - bodyY - m * 0.6;
+    L.bay = { x: m, y: bodyY, w: (W - m * 2) * 0.6 - m * 0.5, h: bodyH };
+    var rx = L.bay.x + L.bay.w + m;
+    var rw = W - rx - m;
+    L.vu = { x: rx, y: bodyY, w: rw, h: bodyH * 0.46 };
+    L.knobs = { x: rx, y: bodyY + bodyH * 0.46 + m * 0.5, w: rw, h: bodyH * 0.54 - m * 0.5 };
+  } else {
+    L.title = { x: m, y: m * 0.6, w: W - m * 2, h: H * 0.1 };
+    var y0 = L.title.y + L.title.h + m * 0.4;
+    var rest = L.footer.y - y0 - m * 0.6;
+    L.bay = { x: m, y: y0, w: W - m * 2, h: rest * 0.37 };
+    L.vu = { x: m, y: y0 + L.bay.h + m * 0.5, w: W - m * 2, h: rest * 0.19 };
+    L.knobs = { x: m, y: L.vu.y + L.vu.h + m * 0.5, w: W - m * 2, h: rest * 0.44 - m * 0.5 };
+  }
+  L.knobCols = 3; L.knobRows = 2;
+  return L;
+}
+
+/* ---- pages ---------------------------------------------------------------- */
+var PAGES = ['MACRO', 'FILTER', 'REPEAT', 'DELAY'];
+var pageN = 0, pagePos = 0, swiping = false;
+
+function pageBody(i, dt, L, now) {
+  if (i === 0) return macroBody(dt, L, now);
+  if (i === 1) return filterBody(dt, L, now);
+  if (i === 2) return repeatBody(dt, L, now);
+  return delayBody(dt, L, now);
+}
+
+function draw(now) {
+  var dt = draw.last ? Math.min(0.1, (now - draw.last) / 1000) : 0;
+  draw.last = now;
+  var L = layout();
+  hits.length = 0;
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = '#080a07'; ctx.fillRect(0, 0, W, H);
+
+  /* the light the machine throws on the table: green while it decays, amber as the repeats
+   * pile up, red and breathing once it is at the edge of running away */
+  var hot = st.intensity > 0.75 ? 2 : st.intensity > 0.55 ? 1 : 0;
+  var amb = hot === 2 ? RED : hot === 1 ? AMBER : GREEN_HI;
+  var ambA = (hot === 2 ? 0.18 : hot === 1 ? 0.12 : 0.08) * (0.6 + 0.4 * (st.vu || 0));
+  if (hot === 2) ambA *= 0.75 + 0.25 * Math.sin(now * 0.006);
+  var ag = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.15, W / 2, H / 2, Math.max(W, H) * 0.72);
+  ag.addColorStop(0, amb); ag.addColorStop(0.55, amb); ag.addColorStop(1, 'rgba(8,10,7,0)');
+  ctx.globalAlpha = ambA; ctx.fillStyle = ag; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+
+  /* chassis */
+  rr(L.m * 0.35, L.m * 0.35, W - L.m * 0.7, H - L.m * 0.7, Math.min(W, H) * 0.03);
+  var ch = ctx.createLinearGradient(0, 0, 0, H);
+  ch.addColorStop(0, '#1a1d16'); ch.addColorStop(0.45, '#121510'); ch.addColorStop(1, '#0b0d09');
+  ctx.fillStyle = ch; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = GOLD; ctx.stroke();
+  rr(L.m * 0.75, L.m * 0.75, W - L.m * 1.5, H - L.m * 1.5, Math.min(W, H) * 0.025);
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(201,162,39,.35)'; ctx.stroke();
+  var sr = Math.max(3, Math.min(W, H) * 0.008);
+  screw(L.m * 1.35, L.m * 1.35, sr); screw(W - L.m * 1.35, L.m * 1.35, sr);
+  screw(L.m * 1.35, H - L.m * 1.35, sr); screw(W - L.m * 1.35, H - L.m * 1.35, sr);
+
+  /* title band */
+  var titleSize = portrait ? L.title.h * 0.26 : L.title.h * 0.34;
+  var titleSp = titleSize * 0.13;
+  var titleTxt = 'MPC DJ FX 2';
+  var room = L.title.w * (portrait ? 0.94 : 0.62);
+  for (var fit = 0; fit < 30 && labelWidth(titleTxt, titleSize, titleSp) > room; fit++) {
+    titleSize *= 0.94; titleSp = titleSize * 0.13;
+  }
+  var ty = L.title.y + L.title.h * (portrait ? 0.26 : 0.36);
+  label(titleTxt, L.title.x, ty, titleSize, CREAM, 'left', titleSp);
+  var subSize = portrait ? titleSize * 0.5 : L.title.h * 0.17;
+  label('ISOLATOR • FILTER • REPEAT • DELAY', L.title.x, ty + titleSize * 1.05, subSize, GOLD, 'left', subSize * 0.3);
+  ctx.beginPath();
+  ctx.moveTo(L.title.x, L.title.y + L.title.h * 0.86);
+  ctx.lineTo(L.title.x + L.title.w, L.title.y + L.title.h * 0.86);
+  ctx.lineWidth = 2; ctx.strokeStyle = GOLD; ctx.stroke();
+  /* the two numbers that matter: host tempo, and the leading head's time in effect */
+  var rx = L.title.x + L.title.w, big = portrait ? titleSize * 0.9 : L.title.h * 0.4;
+  if (portrait) ty = ty + titleSize * 1.05;
+  var msTxt = st.delay_ms > 0 ? st.delay_ms.toFixed(0) : '--';
+  ctx.font = '600 ' + Math.round(big) + 'px ui-monospace,SFMono-Regular,Menlo,monospace';
+  var msW = Math.max(ctx.measureText(msTxt).width, ctx.measureText('MS').width * 2.2);
+  var bpmTxt = (st.bpm_seen && st.bpm > 1) ? String(Math.round(st.bpm)) : '--';
+  text(msTxt, rx, ty, big, CREAM, 'right');
+  label(st.tempo_sync ? 'MS SYNC' : 'MS', rx, ty + L.title.h * 0.3, L.title.h * 0.13, FAINT, 'right', 1);
+  text(bpmTxt, rx - msW - L.title.h * 0.3, ty, big, CREAM, 'right');
+  label('BPM', rx - msW - L.title.h * 0.3, ty + L.title.h * 0.3, L.title.h * 0.13, FAINT, 'right', 1);
+
+  /* the pages slide; the chassis and the title band stay put */
+  var focused = Math.round(pagePos);
+  for (var pi = 0; pi < PAGES.length; pi++) {
+    var off = (pi - pagePos) * W;
+    if (Math.abs(off) > W * 1.02) continue;
+    ctx.save();
+    ctx.translate(off, 0);
+    var before = hits.length;
+    pageBody(pi, pi === focused ? dt : 0, L, now);
+    /* a page that is still sliding in must not take touches meant for the one on screen */
+    if (pi !== focused) hits.length = before;
+    ctx.restore();
+  }
+  drawFooter(L, now);
+  drawBubble();
+  drawNote();
+
+  ctx.fillStyle = 'rgba(0,0,0,.10)';
+  for (var sy2 = 0; sy2 < H; sy2 += 3) ctx.fillRect(0, sy2, W, 1);
+
+  if (!swiping) {
+    if (Math.abs(pagePos - pageN) > 0.001) pagePos += (pageN - pagePos) * Math.min(1, dt * 12);
+    else pagePos = pageN;
+  }
+
+  requestAnimationFrame(draw);
+}
+
+/* --- page 0: the isolator's response, and the DJ filter --------------------- */
+function filterBody(dt, L, now) {
+  var bay = L.bay;
+  panel(bay);
+  /* the curve IS the isolator: three bands, two crossovers, drawn from the numbers the
+   * plugin publishes. No second model of the filter here. */
+  var pad = Math.min(bay.w, bay.h) * 0.08;
+  var gx = bay.x + pad, gy = bay.y + bay.h * 0.16, gw = bay.w - pad * 2, gh = bay.h * 0.6;
+  var midY = gy + gh * 0.6;
+  var loEnd = clamp((Math.log(st.iso_lo_x / 60) / Math.log(800 / 60)), 0, 1);
+  var hiStart = clamp((Math.log(st.iso_hi_x / 800) / Math.log(8000 / 800)), 0, 1);
+  var loX = gx + gw * (0.04 + loEnd * 0.5);
+  var hiX = gx + gw * (0.54 + hiStart * 0.42);
+  function dbToY(db) { return midY - clamp(db, -24, 12) / 36 * gh * 0.62; }
+  ctx.beginPath();
+  ctx.moveTo(gx, dbToY(st.iso_lo));
+  ctx.lineTo(loX, dbToY(st.iso_lo));
+  ctx.lineTo(loX + gw * 0.05, dbToY(st.iso_mid));
+  ctx.lineTo(hiX, dbToY(st.iso_mid));
+  ctx.lineTo(hiX + gw * 0.05, dbToY(st.iso_hi));
+  ctx.lineTo(gx + gw, dbToY(st.iso_hi));
+  ctx.lineWidth = Math.max(2, bay.h * 0.012); ctx.strokeStyle = GREEN_HI;
+  ctx.shadowColor = GREEN_HI; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
+  /* dB grid: without it a flat 0 dB curve is just a line in an empty box */
+  [-24, -12, 12].forEach(function (db) {
+    ctx.beginPath(); ctx.moveTo(gx, dbToY(db)); ctx.lineTo(gx + gw, dbToY(db));
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(233,228,210,.08)'; ctx.stroke();
+    label((db > 0 ? '+' : '') + db, gx - pad * 0.15, dbToY(db) + 4, bay.h * 0.04, FAINT, 'right', 0);
+  });
+  ctx.beginPath(); ctx.moveTo(gx, dbToY(0)); ctx.lineTo(gx + gw, dbToY(0));
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(201,162,39,.28)'; ctx.stroke();
+  label('ISOLATOR RESPONSE', bay.x + bay.w * 0.5, bay.y + bay.h * 0.075, bay.h * 0.055, DIM, 'center', 1.2);
+  [['LOW', st.iso_lo, gx + gw * 0.22], ['MID', st.iso_mid, gx + gw * 0.5], ['HI', st.iso_hi, gx + gw * 0.86]]
+    .forEach(function (b2) {
+      text((b2[1] > 0 ? '+' : '') + Math.round(b2[1]) + ' dB', b2[2], dbToY(b2[1]) - bay.h * 0.05,
+           bay.h * 0.05, CREAM, 'center');
+    });
+
+  /* the DJ filter, the one control a hand goes to mid-set: a bipolar fader with a detent */
+  var f = L.vu, fy = f.y + f.h * 0.62, fx0 = f.x + f.w * 0.12, fw = f.w * 0.76;
+  ctx.beginPath(); ctx.moveTo(fx0, fy); ctx.lineTo(fx0 + fw, fy);
+  ctx.lineWidth = Math.max(6, f.h * 0.06); ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(10,14,10,.9)'; ctx.stroke();
+  var cxp = fx0 + fw * ((st.dj_filter + 1) / 2);
+  ctx.beginPath(); ctx.moveTo(fx0 + fw / 2, fy); ctx.lineTo(cxp, fy);
+  ctx.lineWidth = Math.max(5, f.h * 0.055); ctx.strokeStyle = Math.abs(st.dj_filter) < 0.02 ? GOLD_D : GREEN_HI; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cxp, fy, f.h * 0.07, 0, 6.2832); ctx.fillStyle = CREAM; ctx.fill();
+  label('DJ FILTER', f.x + f.w * 0.5, fy - f.h * 0.17, f.h * 0.1, DIM, 'center', f.h * 0.03);
+  text(Math.abs(st.dj_filter) < 0.02 ? 'OFF' : (st.dj_filter < 0 ? 'HP' : 'LP') + ' ' + Math.abs(Math.round(st.dj_filter * 100)),
+       f.x + f.w * 0.5, fy + f.h * 0.17, f.h * 0.1, CREAM, 'center');
+  hits.push({ t: 'fader', key: 'dj_filter', x: fx0 - f.h * 0.1, y: fy - f.h * 0.12,
+              w: fw + f.h * 0.2, h: f.h * 0.24, v: (st.dj_filter + 1) / 2,
+              x0: fx0, tw: fw,
+              map: function (q) { return Math.round((q * 2 - 1) * 100) / 100; } });
+
+  knobRow(L, [
+    ['LOW', (st.iso_lo + 24) / 30, Math.round(st.iso_lo) + 'dB', 'iso_lo', function (q) { return Math.round(q * 30 - 24); }],
+    ['MID', (st.iso_mid + 24) / 30, Math.round(st.iso_mid) + 'dB', 'iso_mid', function (q) { return Math.round(q * 30 - 24); }],
+    ['HI', (st.iso_hi + 24) / 30, Math.round(st.iso_hi) + 'dB', 'iso_hi', function (q) { return Math.round(q * 30 - 24); }],
+    ['LO X', Math.log(st.iso_lo_x / 60) / Math.log(800 / 60), Math.round(st.iso_lo_x) + 'Hz', 'iso_lo_x',
+      function (q) { return Math.round(60 * Math.pow(800 / 60, q)); }],
+    ['HI X', Math.log(st.iso_hi_x / 800) / Math.log(8000 / 800), Math.round(st.iso_hi_x) + 'Hz', 'iso_hi_x',
+      function (q) { return Math.round(800 * Math.pow(8000 / 800, q)); }],
+    ['RESO', st.dj_reso, Math.round(st.dj_reso * 100) + '%', 'dj_reso', null]
+  ]);
+}
+
+/* --- page 1: the beat repeat ------------------------------------------------- */
+function repeatBody(dt, L, now) {
+  var bay = L.bay;
+  panel(bay);
+  var px = bay.x + bay.w * 0.05, pw = bay.w * 0.9;
+  var gy = bay.y + bay.h * 0.16, ch = Math.min(bay.h * 0.17, pw * 0.1);
+  /* eight grid cells: the repeat's own table, tapped */
+  for (var m = 0; m < 8; m++) {
+    var cw = pw / 8, mx = px + m * cw, on = st.rep_mode === m;
+    rr(mx + 2, gy, cw - 4, ch, Math.min(6, ch * 0.22));
+    ctx.fillStyle = on ? 'rgba(31,143,74,.62)' : 'rgba(10,14,10,.72)'; ctx.fill();
+    ctx.lineWidth = on ? 2 : 1; ctx.strokeStyle = on ? GREEN_HI : 'rgba(201,162,39,.28)'; ctx.stroke();
+    text(MODES[m], mx + cw / 2, gy + ch / 2, Math.min(ch * 0.46, cw * 0.34), on ? CREAM : FAINT, 'center');
+    hits.push({ t: 'mode', i: m, x: mx + 2, y: gy, w: cw - 4, h: ch });
+  }
+  /* the repeat meter: how much of the input the stage is actually holding */
+  var my = gy + ch * 1.6, mh = bay.h * 0.1;
+  rr(px, my, pw, mh, mh * 0.4);
+  ctx.fillStyle = 'rgba(10,14,10,.7)'; ctx.fill();
+  var mw = clamp(st.rep_env, 0, 1) * (pw - 4);
+  rr(px + 2, my + 2, Math.max(0, mw), mh - 4, mh * 0.3);
+  ctx.fillStyle = st.rep_mode ? AMBER : 'rgba(120,110,80,.5)'; ctx.fill();
+  label('REPEAT ACTIVITY', px, my + mh * 1.9, mh * 0.7, FAINT, 'left', 1);
+  seg(px, my + mh * 2.9, pw, ch * 0.8, 'AUTO-FILL', ['FILL', 'STUTTER'], st.fill_mode, 'fill_mode');
+
+  drawVU(L.vu, vuNeedle(dt, st.vu));
+
+  knobRow(L, [
+    ['GATE', st.rep_gate, Math.round(st.rep_gate * 100) + '%', 'rep_gate', null],
+    ['CHANCE', st.rep_chance, Math.round(st.rep_chance * 100) + '%', 'rep_chance', null],
+    ['REPEATS', st.rep_count / 8, String(st.rep_count), 'rep_count', function (q) { return Math.round(q * 8); }],
+    ['GLITCH', st.rep_mix, Math.round(st.rep_mix * 100) + '%', 'rep_mix', null],
+    ['VERB', st.verb_amount, Math.round(st.verb_amount * 100) + '%', 'verb_amount', null],
+    ['FLANGER', st.fl_mix, Math.round(st.fl_mix * 100) + '%', 'fl_mix', null]
+  ]);
+}
+
+/* --- page 2: the delay ------------------------------------------------------ */
+function delayBody(dt, L, now) {
+  var bay = L.bay;
+  panel(bay);
+  /* the two numbers that matter: the time in effect, and the division it follows */
+  var ty = bay.y + bay.h * 0.3;
+  text(st.dly_sync ? DIVS[st.dly_div] : Math.round(st.dly_time) + ' ms',
+       bay.x + bay.w * 0.5, ty, bay.h * 0.2, CREAM, 'center');
+  label(st.dly_sync ? 'SYNCED TO THE HOST' : 'FREE TIME', bay.x + bay.w * 0.5, ty + bay.h * 0.15,
+        bay.h * 0.055, GOLD, 'center', 1.2);
+  seg(bay.x + bay.w * 0.06, bay.y + bay.h * 0.52, bay.w * 0.88, bay.h * 0.1,
+      'TIME SOURCE', ['FREE', 'SYNC'], st.dly_sync, 'dly_sync');
+  var dvy = bay.y + bay.h * 0.72;
+  var dsel = clamp(st.dly_div, 0, 11);
+  text(DIVS[dsel], bay.x + bay.w * 0.5, dvy + bay.h * 0.06, bay.h * 0.09, st.dly_sync ? GREEN_HI : FAINT, 'center');
+  var nxt = hits.length;
+  hits.push({ t: 'div', x: bay.x + bay.w * 0.2, y: dvy - bay.h * 0.02, w: bay.w * 0.6, h: bay.h * 0.16 });
+  if (st.dly_pingpong) label('PING PONG', bay.x + bay.w * 0.5, bay.y + bay.h * 0.95, bay.h * 0.05, CREAM, 'center', 1.4);
+
+  drawVU(L.vu, vuNeedle(dt, st.dly_env));
+
+  knobRow(L, [
+    ['TIME', Math.log(st.dly_time / 1) / Math.log(7000), Math.round(st.dly_time) + 'ms', 'dly_time',
+      function (q) { return Math.round(Math.pow(7000, q)); }],
+    ['FBK', st.dly_fbk, Math.round(st.dly_fbk * 100) + '%', 'dly_fbk', null],
+    ['TONE', st.dly_tone, Math.round(st.dly_tone * 100) + '%', 'dly_tone', null],
+    ['DLY MIX', st.dly_mix, Math.round(st.dly_mix * 100) + '%', 'dly_mix', null],
+    ['VERB', st.verb_amount, Math.round(st.verb_amount * 100) + '%', 'verb_amount', null],
+    ['HP', Math.log(st.hp_hz / 20) / Math.log(20000 / 20), Math.round(st.hp_hz) + 'Hz', 'hp_hz',
+      function (q) { return Math.round(20 * Math.pow(1000, q)); }]
+  ]);
+}
+
+/* --- page 3: the eight macros ---------------------------------------------- */
+function macroBody(dt, L, now) {
+  var bay = L.bay;
+  panel(bay);
+  var names = [['LOW-EQ', 'mac_lo'], ['MID-EQ', 'mac_mid'], ['HI-EQ', 'mac_hi'], ['LPF', 'mac_lpf'],
+               ['GLITCH', 'mac_glitch'], ['VERB', 'mac_verb'], ['FADE', 'mac_fade'], ['AUTO-FILL', 'mac_fill']];
+  var cols = 4, rows = 2;
+  var cw = (bay.w * 0.92) / cols, chh = (bay.h * 0.7) / rows;
+  var kr = Math.min(cw, chh) * 0.26;
+  for (var i = 0; i < 8; i++) {
+    var kx = bay.x + bay.w * 0.04 + cw * ((i % cols) + 0.5);
+    var ky = bay.y + bay.h * 0.1 + chh * (Math.floor(i / cols) + 0.35);
+    knob(kx, ky, kr, st[names[i][1]], names[i][0], Math.round(st[names[i][1]] * 100) + '%', names[i][1], null);
+  }
+  /* A hint is only worth having if it fits: at bay.h*0.05 on a tablet this was one giant line
+   * running out of the panel. Cap it by width as well as height, and drop it if it cannot fit. */
+  var hint = 'ONE GESTURE EACH — THEY MOVE THE REAL KNOBS';
+  var hsize = Math.min(bay.h * 0.035, bay.w * 0.024);
+  while (hsize > 7 && labelWidth(hint, hsize, 1) > bay.w * 0.9) hsize *= 0.92;
+  if (hsize > 7) label(hint, bay.x + bay.w * 0.5, bay.y + bay.h * 0.93, hsize, FAINT, 'center', 1);
+
+  drawVU(L.vu, vuNeedle(dt, st.vu));
+
+  knobRow(L, [
+    ['OUTPUT', (st.output_gain + 24) / 48, (st.output_gain > 0 ? '+' : '') + Math.round(st.output_gain) + 'dB',
+      'output_gain', function (q) { return Math.round(q * 48 - 24); }],
+    ['MIX', st.mix, Math.round(st.mix * 100) + '% wet', 'mix', null],
+    ['LIMITER', st.limiter, st.limiter ? 'ON' : 'OFF', 'limiter',
+      function (q) { return q > 0.5 ? 1 : 0; }],
+    ['GRAIN RATE', Math.log(st.gr_rate / 1) / Math.log(200), Math.round(st.gr_rate) + '', 'gr_rate',
+      function (q) { return Math.round(Math.pow(200, q)); }],
+    ['GRAIN MIX', st.gr_mix, Math.round(st.gr_mix * 100) + '%', 'gr_mix', null],
+    ['FL RATE', st.fl_rate, Math.round(st.fl_rate * 100) + '%', 'fl_rate', null]
+  ]);
+}
+
+/* a plain instrument bay: the chassis colour the tape port uses, without the tape */
+function panel(bay) {
+  rr(bay.x, bay.y, bay.w, bay.h, Math.min(bay.w, bay.h) * 0.05);
+  var bg = ctx.createLinearGradient(0, bay.y, 0, bay.y + bay.h);
+  bg.addColorStop(0, '#12261a'); bg.addColorStop(0.55, '#0d1c12'); bg.addColorStop(1, '#081009');
+  ctx.fillStyle = bg; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = GOLD_D; ctx.stroke();
+}
+
+/* the meter's needle, with the spring the tape port uses (0..1 in, -0.05..1.08 out) */
+function vuNeedle(dt, level) {
+  var db = 20 * Math.log10(Math.max(1e-4, level));
+  var target = clamp((db + 48) / 48, 0, 1.04);
+  vuVel += (target - vuPos) * 260 * dt - vuVel * 26 * dt;
+  vuPos = clamp(vuPos + vuVel * dt, -0.05, 1.08);
+  return vuPos;
+}
+
+/* a row of knobs for a page: [label, pos, shown, key, map] */
+function knobRow(L, items) {
+  knobGrid(items, L.knobs, L.knobCols, L.knobRows);
+}
+
+function knobGrid(items, kn, cols, rows) {
+  var cw = kn.w / cols, chh = kn.h / rows;
+  var kr = Math.min(cw, chh) * 0.3;
+  for (var n = 0; n < cols * rows; n++) {
+    var it = items[n];
+    if (!it) continue;
+    var kx = kn.x + cw * ((n % cols) + 0.5), ky = kn.y + chh * (Math.floor(n / cols) + 0.42);
+    knob(kx, ky, kr, it[1], it[0], it[2], it[3], it[4]);
+  }
+}
+
+var bubble = null;
+
+function drawBubble() {
+  if (!bubble) return;
+  if (performance.now() > bubble.until) { bubble = null; return; }
+  ctx.font = '600 ' + Math.round(bubble.size) + 'px ui-monospace,SFMono-Regular,Menlo,monospace';
+  var w = ctx.measureText(bubble.text).width + bubble.size * 1.6;
+  var h = bubble.size * 1.9;
+  var x = clamp(bubble.x - w / 2, 6, W - w - 6), y = clamp(bubble.y - h, 6, H - h - 6);
+  rr(x, y, w, h, h * 0.28);
+  ctx.fillStyle = 'rgba(10,14,10,.92)'; ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = GOLD; ctx.stroke();
+  text(bubble.text, x + w / 2, y + h / 2 + 0.5, bubble.size, CREAM, 'center');
+}
+
+/* a short reason a write was refused, where the eye already is */
+function drawNote() {
+  if (!note || performance.now() > noteUntil) return;
+  var size = Math.max(11, Math.min(W, H) * 0.026);
+  ctx.font = '600 ' + Math.round(size) + 'px ui-monospace,SFMono-Regular,Menlo,monospace';
+  var w = ctx.measureText(note).width + size * 1.4;
+  var x = clamp(W / 2 - w / 2, 6, W - w - 6), y = H * 0.38;
+  rr(x, y, w, size * 1.9, size * 0.5);
+  ctx.fillStyle = 'rgba(60,10,8,.94)'; ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = RED; ctx.stroke();
+  text(note, x + w / 2, y + size * 0.95, size, CREAM, 'center');
+}
+
+/* the footer is shared: page dots, the page name, and the machine's own lamps */
+function drawFooter(L, now) {
+  var ft = L.footer;
+  var dr = Math.min(ft.h * 0.2, Math.min(W, H) * 0.016);
+  var dx0 = ft.x + dr * 1.2, dy = ft.y + ft.h * 0.38;
+  for (var i = 0; i < PAGES.length; i++) {
+    var on = Math.round(pagePos) === i;
+    ctx.beginPath(); ctx.arc(dx0 + i * dr * 3.2, dy, on ? dr * 0.9 : dr * 0.62, 0, 6.2832);
+    ctx.fillStyle = on ? GOLD : 'rgba(201,162,39,.28)'; ctx.fill();
+    hits.push({ t: 'page', i: i, x: dx0 + i * dr * 3.2 - dr * 1.6, y: dy - dr * 1.6, w: dr * 3.2, h: dr * 3.2 });
+  }
+  var nameX = dx0 + (PAGES.length - 1) * dr * 3.2 + dr * 2.2;
+  label(PAGES[Math.round(pagePos)], nameX, ft.y + ft.h * 0.42, ft.h * 0.3, CREAM, 'left', ft.h * 0.06);
+  if (!portrait) label('SWIPE', nameX + ft.h * 2.2, ft.y + ft.h * 0.42, ft.h * 0.2, FAINT, 'left', ft.h * 0.08);
+
+  if (Math.round(pagePos) !== 0) return;
+  var lr = Math.min(ft.h * 0.17, Math.min(W, H) * 0.015);
+  var ly = ft.y + ft.h * 0.3;
+  /* This port's own lamps. The tape port's names (tempo_sync / input_send / ping_pong) were
+   * copied here once and every tap came back "unknown key" - the engine knows dly_sync and
+   * dly_pingpong, and has no input_send at all. */
+  var lamps = [
+    ['REPEAT', st.rep_mode > 0, AMBER, 'rep_mode', 'toggle'],
+    ['SYNC', st.dly_sync > 0, GREEN_HI, 'dly_sync', 'toggle'],
+    ['PONG', st.dly_pingpong > 0, GREEN_HI, 'dly_pingpong', 'toggle'],
+    ['VERB', st.verb_amount > 0.02, GOLD, 0, 0],
+    ['FB', st.dly_fbk > 0.75, RED, 0, 0]
+  ];
+  var lampsX = ft.x + ft.w * (portrait ? 0.44 : 0.52), lampsW = ft.w - (lampsX - ft.x);
+  var step = lampsW / lamps.length;
+  for (var q = 0; q < lamps.length; q++) {
+    var l = lamps[q], cx2 = lampsX + step * (q + 0.5);
+    lamp(cx2, ly, lr, l[1], l[2], l[0], l[3] || undefined, l[4]);
+  }
+}
+
+function drawVU(r, pos) {
+  rr(r.x, r.y, r.w, r.h, Math.min(r.w, r.h) * 0.06);
+  var g = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
+  g.addColorStop(0, '#12200f'); g.addColorStop(1, '#070c06');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = GOLD_D; ctx.stroke();
+
+  var cx = r.x + r.w * 0.5, baseY = r.y + r.h * 0.94, rad = Math.min(r.w * 0.44, r.h * 0.78);
+  var a0 = -Math.PI * 0.85, a1 = -Math.PI * 0.15;
+  ctx.beginPath(); ctx.arc(cx, baseY, rad, a0, a1);
+  ctx.lineWidth = Math.max(1.5, r.h * 0.02); ctx.strokeStyle = 'rgba(233,228,210,.35)'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, baseY, rad, a1 - 0.32, a1);
+  ctx.lineWidth = Math.max(3, r.h * 0.05); ctx.strokeStyle = RED; ctx.stroke();
+  for (var i = 0; i <= 10; i++) {
+    var a = a0 + (a1 - a0) * (i / 10);
+    var inner = rad * (i % 5 === 0 ? 0.86 : 0.92);
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * inner, baseY + Math.sin(a) * inner);
+    ctx.lineTo(cx + Math.cos(a) * rad, baseY + Math.sin(a) * rad);
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(233,228,210,.5)'; ctx.stroke();
+  }
+  label('RECORD LEVEL', r.x + r.w * 0.5, r.y + r.h * 0.14, r.h * 0.12, DIM, 'center', r.h * 0.03);
+  text(Math.round(clamp(pos, 0, 1) * 100) + '%', r.x + r.w * 0.09, r.y + r.h * 0.86, r.h * 0.13,
+       FAINT, 'left');
+  var na = a0 + (a1 - a0) * clamp(pos, 0, 1);
+  ctx.save();
+  ctx.translate(cx, baseY);
+  ctx.rotate(na);
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(rad * 0.88, 0);
+  ctx.lineWidth = Math.max(1.5, r.h * 0.018); ctx.strokeStyle = '#f4f1e6'; ctx.stroke();
+  ctx.restore();
+  ctx.beginPath(); ctx.arc(cx, baseY, Math.max(3, r.h * 0.05), 0, 6.2832);
+  ctx.fillStyle = '#2a2e24'; ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = GOLD_D; ctx.stroke();
+}
+
+/* ---- boot ---------------------------------------------------------------- */
+function fit() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = cv.width = Math.floor(cv.clientWidth * DPR) / DPR;
+  H = cv.height = Math.floor(cv.clientHeight * DPR) / DPR;
+  cv.width = Math.floor(W * DPR); cv.height = Math.floor(H * DPR);
+  portrait = H > W * 1.08;
+}
+addEventListener('resize', fit); fit();
+requestAnimationFrame(draw);
+
+/* ---- touch and mouse: the panel is a control surface too ------------------- */
+function localXY(ev) {
+  var r = cv.getBoundingClientRect();
+  return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+}
+function hitAt(x, y) {
+  /* the smallest target wins, so a knob inside a bigger region still gets the touch */
+  var best = null, bestArea = 1e9;
+  for (var i = 0; i < hits.length; i++) {
+    var h = hits[i], area;
+    if (h.t === 'knob' || h.t === 'toggle') {
+      var dx = x - h.x, dy = y - h.y;
+      if (dx * dx + dy * dy > h.r * h.r) continue;
+      area = h.r * h.r;
+    } else {
+      if (x < h.x || y < h.y || x > h.x + h.w || y > h.y + h.h) continue;
+      area = h.w * h.h;
+    }
+    if (area < bestArea) { bestArea = area; best = h; }
+  }
+  return best;
+}
+function setLocal(key, val) {
+  /* optimistic: the control follows the finger now, /state confirms it a block later */
+  st[key] = val;
+}
+function sendVal(h, pos) {
+  var v = h.map ? h.map(pos) : pos;
+  return v;
+}
+
+cv.addEventListener('pointerdown', function (ev) {
+  var p = localXY(ev), h = hitAt(p.x, p.y);
+  showBar();
+  ev.preventDefault();
+  if (!h) {
+    drag = { swipe: true, x0: p.x, pos0: pagePos };
+    swiping = true;
+    cv.setPointerCapture(ev.pointerId);
+    return;
+  }
+  if (h.t === 'page') { pageN = h.i; return; }
+  if (h.t === 'mode') { setLocal('rep_mode', h.i); post('rep_mode', h.i); return; }
+  if (h.t === 'seg') {
+    setLocal(h.key, h.i); post(h.key, h.i);
+    bubble = { text: (h.name || String(h.i)), x: p.x, y: p.y - 8,
+               size: Math.max(12, Math.min(W, H) * 0.028), until: performance.now() + 1200 };
+    return;
+  }
+  if (h.t === 'toggle') {
+    /* a lamp that is also a switch: tap flips it and tells the machine exactly once */
+    var nv = h.toggle ? (h.on ? 0 : 1) : 1;
+    if (h.key === 'rep_mode') nv = h.on ? 0 : 3;   /* 3 = 1/8, the grid's useful default */
+    setLocal(h.key, nv); post(h.key, nv);
+    bubble = { text: (h.key || '').toUpperCase() + '  ' + (nv ? 'ON' : 'OFF'), x: p.x, y: p.y - 8,
+               size: Math.max(12, Math.min(W, H) * 0.026), until: performance.now() + 1200 };
+    return;
+  }
+  if (h.t === 'fader') {
+    drag = { key: h.key, fader: true, x0: h.x0, tw: h.tw, x: p.x, y: p.y, startV: h.v, map: h.map };
+    cv.setPointerCapture(ev.pointerId);
+    return;
+  }
+  if (h.t === 'div') {
+    var nd = (st.dly_div + (p.x > h.x + h.w / 2 ? 1 : 11)) % 12;
+    setLocal('dly_div', nd); post('dly_div', nd);
+    return;
+  }
+  drag = { key: h.key, startY: p.y, startV: h.v, x: h.x, y: h.y, last: 0,
+           name: (h.name || h.key), map: h.map };
+  cv.setPointerCapture(ev.pointerId);
+}, { passive: false });
+
+cv.addEventListener('pointermove', function (ev) {
+  if (!drag) return;
+  if (drag.swipe) {
+    var sp = localXY(ev);
+    pagePos = clamp(drag.pos0 - (sp.x - drag.x0) / Math.max(1, W), 0, PAGES.length - 1);
+    return;
+  }
+  var p = localXY(ev);
+  if (drag.fader) {
+    /* absolute finger position against the track the fader is drawn on: the old code divided
+     * by a guess of the screen width, so the handle ran away from the finger */
+    var fpos = clamp((p.x - drag.x0) / Math.max(20, drag.tw), 0, 1);
+    var freal = drag.map ? drag.map(fpos) : fpos;
+    drag.value = freal;
+    setLocal(drag.key, freal);
+    bubble = { text: 'FILTER  ' + (freal < 0 ? 'HP ' : 'LP ') + Math.abs(Math.round(freal * 100)),
+               x: p.x, y: p.y - 8, size: Math.max(12, Math.min(W, H) * 0.026),
+               until: performance.now() + 1200 };
+    if (performance.now() - (drag.last || 0) > 80) { drag.last = performance.now(); post(drag.key, freal); }
+    return;
+  }
+  var pos = clamp(drag.startV + (drag.startY - p.y) / 180, 0, 1);
+  var real = sendVal(drag, pos);
+  drag.value = real;
+  setLocal(drag.key, real);
+  bubble = { text: drag.name.toUpperCase() + '  ' + (drag.map ? String(real) : Math.round(real * 100) + '%'),
+             x: drag.x, y: drag.y - 8, size: Math.max(12, Math.min(W, H) * 0.026),
+             until: performance.now() + 1500 };
+  if (performance.now() - drag.last > 80) { drag.last = performance.now(); post(drag.key, real); }
+});
+
+function endDrag(ev) {
+  if (!drag) return;
+  if (bubble) bubble.until = performance.now() + 700;
+  if (drag.swipe) {
+    var dx = pagePos - drag.pos0;
+    var target = Math.round(drag.pos0);
+    if (Math.abs(dx) > 0.12) target += dx > 0 ? 1 : -1;   /* a real flick, not a wobble */
+    pageN = clamp(target, 0, PAGES.length - 1);
+    swiping = false;
+    drag = null;
+    try { cv.releasePointerCapture(ev.pointerId); } catch (e) {}
+    return;
+  }
+  if (drag.value !== undefined) post(drag.key, drag.value);
+  drag = null;
+  try { cv.releasePointerCapture(ev.pointerId); } catch (e) {}
+}
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+
+/* fullscreen + a bar that gets out of the way */
+var barTimer = 0;
+function showBar() {
+  bar.classList.remove('hide');
+  clearTimeout(barTimer);
+  barTimer = setTimeout(function () { bar.classList.add('hide'); }, 4000);
+}
+showBar();
+addEventListener('pointerdown', showBar);
+document.getElementById('fs').addEventListener('click', function () {
+  var el = document.documentElement;
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (el.requestFullscreen) el.requestFullscreen({ navigationUI: 'hide' }).catch(function () {});
+  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+});
+
+/* Test hook: a background tab throttles requestAnimationFrame, so the headless page test calls
+ * fit()/draw() itself. It exposes the same panel the finger uses — nothing more. */
+window.__djfxPanel = {
+  fit: fit, draw: draw,
+  state: function () { return st; },
+  hits: function () { return hits; },
+  page: function () { return { at: pagePos, target: pageN }; },
+  goPage: function (i) { pageN = i; pagePos = i; },
+  setState: function (o) { for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) st[k] = o[k]; },
+  pair: function () { return pairText; },
+  refreshPair: setPair,
+  portrait: function () { return portrait; },
+  post: post
+};
+})();
+</script>
+</body>
+</html>

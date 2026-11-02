@@ -47,6 +47,16 @@ rm -rf "$PRESET_STAGE"
 echo -n "device presets: "; ssh -o StrictHostKeyChecking=no "root@$DEVICE" \
   "ls '/sdcard/MPC Documents/Plugin Presets/Insert Effects/$FOLDER/'/*.xpl | wc -l"
 
+# The deploy writes the flat skin, which is whichever layout vst.json names. If the user picked
+# another interface, ui.txt still says so while the files were just replaced - the panel shows one
+# skin and the plugin reports another (found 2026-11-02: ui.txt=rack, TUI.json=studio).
+UI=$(ssh -o StrictHostKeyChecking=no "root@$DEVICE" "cat '/sdcard/Synths/$FOLDER/Plugin Skins/ui.txt' 2>/dev/null" | tr -d '\r\n')
+if [ -n "$UI" ] && [ "$UI" != "studio" ]; then
+  echo "== re-applying the selected interface: $UI =="
+  ssh -o StrictHostKeyChecking=no "root@$DEVICE" \
+    "cd '/sdcard/Synths/$FOLDER/Plugin Skins' && [ -d '$UI' ] && cp -f '$UI'/* . && echo applied"
+fi
+
 if [ "${1:-}" = "--no-restart" ]; then
   echo "== restart skipped (--no-restart); re-insert the plugin to load a new .so/skin =="
   exit 0
