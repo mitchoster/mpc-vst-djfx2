@@ -56,6 +56,33 @@ Rendered from `vst/layout.conf` offline, no device needed (`vst/preview.sh`):
 
 `docs/ui-preview/page_0.png` … `page_6.png` — one image per tab.
 
+## Companion screen (phone / tablet)
+
+MPC draws a plugin's screen itself, from pre-rendered PNGs and polled values, and every moving
+widget costs it a redraw. The dense half of this port therefore lives in a browser: the plugin
+serves its own panel on the LAN, reads the same parameters the device shows and writes them back.
+
+![Companion panel — MACRO page](docs/companion/panel-macro.jpg)
+
+![Companion panel — REPEAT page](docs/companion/panel-repeat.jpg)
+
+- **Open it:** `http://<device-ip>:8102/` — the panel prints that address itself in its `PAIR`
+  line, and `/state` publishes it as `url`, so nothing has to be guessed. Add it to the home
+  screen; the plugin serves its own manifest and icon.
+- **Four faces, in the order the device uses:** MACRO first, then FILTER (isolator response
+  drawn from the live band values, DJ filter as a bipolar fader), REPEAT (eight-cell grid,
+  activity meter, Fill/Stutter) and DELAY (time or tempo sync, division, feedback, tone, mix,
+  VERB high-pass).
+- **Two plugins at once:** each plugin owns its own port (`8102` here, `8101`
+  for MPC Tape Echo), so two browser tabs drive two plugins.
+- **Switches:** `DJF2_HTTP=0` disables the listener entirely, `DJF2_HTTP_RW=0` keeps it
+  read-only. Writes require an `X-DJF2: 1` header, which a cross-site form cannot send,
+  so a page on another origin cannot move your effect.
+
+The approach — one canvas, motion extrapolated in the browser, fullscreen,
+add-to-home-screen — is **VADER's** ([sunskiefer/VADER](https://github.com/sunskiefer/VADER), MIT,
+since v0.6.0). No code was taken; see `THIRD_PARTY_NOTICES.md`.
+
 ## Install
 
 1. Unzip `MPC-DJ-FX-2-<version>-mpc-armv7.zip`.
