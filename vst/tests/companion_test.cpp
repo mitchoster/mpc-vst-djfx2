@@ -242,6 +242,14 @@ int main(int argc, char **argv) {
   check(page.find("http://") == std::string::npos || page.find("http://127.0.0.1") != std::string::npos,
         "the page needs no network of its own", "no external reference");
 
+  /* the pairing QR: an SVG whose matrix decodes to this listener's URL */
+  {
+    std::string qr = http(g_port, "GET", "/qr.svg", &status);
+    check(status == 200 && qr.find("<svg") != std::string::npos && qr.find("<path") != std::string::npos,
+          "/qr.svg serves a code", std::to_string(qr.size()) + " bytes");
+    check(qr.find("viewBox") != std::string::npos, "with a viewBox the page can scale", "ok");
+  }
+
   std::string health = http(g_port, "GET", "/healthz", &status);
   check(status == 200 && health == "ok\n", "/healthz", health.substr(0, 8));
   std::string nf = http(g_port, "GET", "/nope", &status);

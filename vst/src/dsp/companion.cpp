@@ -31,6 +31,7 @@
 #include <unistd.h>
 
 #include "companion_page.h"
+#include "qrcodegen.h"
 
 namespace djf2 {
 namespace {
@@ -584,6 +585,34 @@ bool header_is_set(const char *req, const char *name) {
   return false;
 }
 
+
+/* The QR the page (and any companion app) shows so a second phone can join: the same URL
+ * that /state publishes. Encoded here rather than in the page, so one implementation serves
+ * the browser, the app and anything else. Encoder: Project Nayuki's qrcodegen (MIT). */
+int qr_svg(char *out, size_t cap, const char *text) {
+  static uint8_t qr[qrcodegen_BUFFER_LEN_MAX];
+  static uint8_t tmp[qrcodegen_BUFFER_LEN_MAX];
+  if (!qrcodegen_encodeText(text, tmp, qr, qrcodegen_Ecc_LOW, qrcodegen_VERSION_MIN,
+                            qrcodegen_VERSION_MAX, qrcodegen_Mask_AUTO, true))
+    return 0;
+  const int n = qrcodegen_getSize(qr);
+  int w = std::snprintf(out, cap,
+      "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-2 -2 %d %d\" shape-rendering=\"crispEdges\">"
+      "<rect x=\"-2\" y=\"-2\" width=\"%d\" height=\"%d\" fill=\"#e9e4d2\"/>"
+      "<path fill=\"#0a0c09\" d=\"", n + 4, n + 4, n + 4, n + 4);
+  for (int y = 0; y < n && w > 0; y++)
+    for (int x = 0; x < n; x++) {
+      if (!qrcodegen_getModule(qr, x, y)) continue;
+      int run = 1;
+      while (x + run < n && qrcodegen_getModule(qr, x + run, y)) run++;
+      w += std::snprintf(out + (w < (int)cap ? w : 0), w < (int)cap ? cap - (size_t)w : 0,
+                         "M%d %dh%dv1h-%dz", x, y, run, run);
+      x += run - 1;
+    }
+  if (w > 0) w += std::snprintf(out + (w < (int)cap ? w : 0), w < (int)cap ? cap - (size_t)w : 0, "\"/></svg>");
+  return w > 0 && (size_t)w < cap ? w : 0;
+}
+
 void handle_client(int fd, const char *remote) {
   char req[kReqMax];
   size_t used = 0;
@@ -707,6 +736,17 @@ void handle_client(int fd, const char *remote) {
   if (!std::strcmp(target, "/manifest.json")) {
     send_body(fd, 200, "OK", "application/manifest+json", kManifest, sizeof(kManifest) - 1,
               head_only);
+    return;
+  }
+  if (!std::strcmp(target, "/qr.svg")) {
+    static char svg[16384];
+    char url[64];
+    char ip[16] = {0};
+    local_ip(ip, sizeof ip);
+    std::snprintf(url, sizeof url, "http://%s:%d/", ip, g_port.load());
+    const int n = qr_svg(svg, sizeof svg, url);
+    if (n <= 0) { send_body(fd, 500, "Internal Error", "text/plain", "qr\n", 3, head_only); return; }
+    send_body(fd, 200, "OK", "image/svg+xml", svg, (size_t)n, head_only);
     return;
   }
   if (!std::strcmp(target, "/icon.svg")) {

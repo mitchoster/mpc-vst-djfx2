@@ -35,7 +35,7 @@ for f in src/djfx_engine.c src/iso.c src/dub_delay.c src/dub_filter.c src/dub_re
   gcc -c -O2 -std=gnu11 $INC "$f" -o "/tmp/obj/$(basename "$f" .c).o"
 done
 g++ -std=gnu++17 -O2 -Wall -Wextra $INC -o /tmp/djfx_test \
-  tests/companion_test.cpp src/dsp/companion.cpp /tmp/obj/*.o \
+  tests/companion_test.cpp src/dsp/companion.cpp src/dsp/qrcodegen.c /tmp/obj/*.o \
   -lm -lpthread 2>&1 | grep -E "error|Error" && exit 1 || true
 /tmp/djfx_test
 
