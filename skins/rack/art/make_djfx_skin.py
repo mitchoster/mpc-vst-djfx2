@@ -599,6 +599,24 @@ def tiles():
     on.save(os.path.join(OUT, "art", "seg_on.png"))
     print("wrote art/seg_off.png art/seg_on.png (%dx%d)" % (w, h))
 
+def tiles_big():
+    w, h = 108, 40   # one image per control state, at the control size 
+    off = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(off)
+    d.rounded_rectangle([0, 0, w - 1, h - 1], radius=4, fill=(32, 37, 42, 255))
+    d.rounded_rectangle([0, 0, w - 1, h - 1], radius=4, outline=(5, 6, 8, 255), width=1)
+    d.line([(4, 1), (w - 5, 1)], fill=(96, 106, 113, 120), width=1)
+    d.line([(4, h - 2), (w - 5, h - 2)], fill=(0, 0, 0, 190), width=1)
+    on = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(on)
+    d.rounded_rectangle([0, 0, w - 1, h - 1], radius=4, fill=(232, 223, 198, 255))
+    d.rounded_rectangle([0, 0, w - 1, h - 1], radius=4, outline=(229, 168, 65, 210), width=1)
+    d.line([(4, 1), (w - 5, 1)], fill=(255, 252, 240, 200), width=1)
+    d.line([(4, h - 2), (w - 5, h - 2)], fill=(176, 166, 142, 220), width=1)
+    off.save(os.path.join(OUT, "art", "seg_big_off.png"))
+    on.save(os.path.join(OUT, "art", "seg_big_on.png"))
+    print("wrote art/seg_big_off.png art/seg_big_on.png (%dx%d)" % (w, h))
+
 
 def toggle_plate():
     """A mini bat-lever toggle in a machined base plate, with an amber indicator that lights when on."""
@@ -686,6 +704,7 @@ def main():
                 [eq_column(i / 40.0, bw, bh) for i in range(41)])
     write_strip(os.path.join(OUT, "art", "led_strip.png"), [led_bar(i / 40.0) for i in range(41)])
     tiles()
+    tiles_big()
     toggle_plate()
     panic_plate()
 
