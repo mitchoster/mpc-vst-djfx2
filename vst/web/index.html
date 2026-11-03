@@ -90,6 +90,9 @@ function setPair() {
     pairEl.textContent = 'PAIR ' + u;
     /* The address alone asks a second phone to type 22 characters. Tapping the line shows the
      * plugin's own /qr.svg — drawn by the device, so nothing is fetched from outside the LAN. */
+    /* #bar is pointer-events:none so swipes reach the canvas; the line must opt back in, or a
+     * finger tap lands on the canvas and the QR never appears (found on a phone, 2026-11-03). */
+    pairEl.style.pointerEvents = 'auto';
     pairEl.style.cursor = 'pointer';
     /* The <img id="qr"> sits after this script, so look it up when the line is tapped. */
     pairEl.onclick = function () {
