@@ -85,7 +85,7 @@ static const char *const KEYS[] = {
     "eq_on",
     "mix_show",
     "vu_cal",
-    "ui"                                    /* interface selector: Studio / Classic / Rack (skin only) */
+    "ui"                                    /* interface selector: Classic / Rack (skin only) */
 };
 #define NKEYS ((int)(sizeof KEYS / sizeof KEYS[0]))
 _Static_assert(sizeof KEYS / sizeof KEYS[0] == NPARAMS,
@@ -544,13 +544,13 @@ static int dsp_ok(const ctx_t *c)
 
 
 /* ---- interface switch (2026-10-28) ------------------------------------------------------------
- * The three interfaces ship inside the plugin folder as "Plugin Skins/<name>/". They differ in exactly
+ * The two interfaces ship inside the plugin folder as "Plugin Skins/<name>/". They differ in exactly
  * the files MPC reads when a plugin is inserted (TUI.json and the Q-Link banks); the artwork of each one
  * lives in its own subfolder, so switching copies two small JSON files and rewrites no image. An
  * instance that is already running therefore keeps everything it has loaded, and MPC - which binds a
  * skin at insert and has no reload call - shows the new interface on the next insert.
  */
-static const char *const SKIN_DIRS[] = { "studio", "classic", "rack" };
+static const char *const SKIN_DIRS[] = { "classic", "rack" };
 #define NSKINS ((int)(sizeof SKIN_DIRS / sizeof SKIN_DIRS[0]))
 
 static int copy_file(const char *from, const char *to)

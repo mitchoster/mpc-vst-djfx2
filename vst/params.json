@@ -738,12 +738,11 @@
       "key": "ui",
       "name": "INTERFACE",
       "options": [
-        "Studio",
         "Classic",
         "Rack"
       ],
-      "default": 2,
-      "help": "Switches the plugin's interface. The three skins ship with the plugin; the new one appears on the next insert."
+      "default": 0,
+      "help": "Switches the plugin's interface. Both skins ship with the plugin; the new one appears on the next insert."
     }
   ],
   "sections": [

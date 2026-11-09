@@ -8,3 +8,6 @@ vst/build/
 .DS_Store
 Thumbs.db
 *.swp
+# the interface-set build: scratch lab + staged plugin folder
+.build-rack/
+dist-local/
