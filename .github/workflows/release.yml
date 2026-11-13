@@ -23,12 +23,12 @@ on:
 
 jobs:
   vst:
-    uses: open-mpc/mpc-vst-plugins/.github/workflows/vst-release.yml@52c1fb0
+    uses: open-mpc/mpc-vst-plugins/.github/workflows/vst-release.yml@52c1fb072966d7de77e97dd9eec0544548b042dc
     permissions: { contents: write }
     with:
       tag: mpc-dj-fx-2-vst-v${{ inputs.version }}
       version: ${{ inputs.version }}
-      tools_ref: 52c1fb0
+      tools_ref: 52c1fb072966d7de77e97dd9eec0544548b042dc
       vst_dir: vst
       build: vst/build.sh
       host_test: '"$MPC_VST/tools/test_port.sh" vst/vst.json'
