@@ -2,7 +2,7 @@
   "name": "MPC DJ FX 2",
   "vendor": "LarryDaimond",
   "uid": "DjF2",
-  "version": 3200,
+  "version": 3210,
   "so": "mpc_djfx2.so",
   "params": "params.json",
   "layout": "layout.conf",
@@ -38,5 +38,9 @@
     ]
   },
   "art": "html",
-  "skin_post": "skin_post.py"
+  "skin_post": "skin_post.py",
+  "targets": [
+    "armv7",
+    "aarch64"
+  ]
 }

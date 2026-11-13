@@ -13,7 +13,7 @@ ROOT="$(cd "$HERE/.." && pwd)"
 MV="${MPC_VST_PLUGINS:?set MPC_VST_PLUGINS to the mpc-vst-plugins checkout}"
 FOLDER="LarryDaimond - VST - MPC DJ FX 2"
 SO="mpc_djfx2.so"
-VERSION="3.2.0"
+VERSION="3.2.1"
 ABOUT="One-slot DJ insert: 3-band isolator, DJ filter, beat repeat, delay, reverb, flanger, grain delay (the original rack's Glitch stage) and a true-peak limiter, driven by the eight macros measured from Lenny Kiser's DJ-FX rack. Two interfaces: Classic and Rack."
 
 echo "== 1/2 build the interface set =="

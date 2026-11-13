@@ -7,7 +7,7 @@
 # the framework's tools is translated to the host alias first (the sibling ports do the same).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-MV="${MPC_VST_PLUGINS:-$(cd "$(dirname "$0")/../../mpc-vst-plugins" 2>/dev/null && pwd || echo "")}"
+MV="${MPC_VST_PLUGINS:-${MPC_VST:-$(cd "$(dirname "$0")/../../mpc-vst-plugins" 2>/dev/null && pwd || echo "")}}"
 [ -n "$MV" ] || { echo "set MPC_VST_PLUGINS to the mpc-vst-plugins checkout" >&2; exit 2; }
 # Translate a path under the workspace to the prefix the Docker daemon sees: set MPC_VST_WORKSPACE to the
 # directory holding this port and the framework, MPC_VST_HOST_ROOT to how the daemon sees it (both empty

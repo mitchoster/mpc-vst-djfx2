@@ -1,0 +1,36 @@
+# Builds the release with the shared Open MPC workflow (open-mpc/mpc-vst-plugins).
+#
+# It attaches the zips to a DRAFT release; a person installs that exact zip on a device
+# (docs/RELEASING.md steps 4-5) and then publishes the draft, which creates the tag.
+#
+# Pin the tool repo to one commit in BOTH the `uses:` line and `tools_ref`.
+#
+# Keep this SHA in step with the other two LarryDaimond ports
+# (mpc-vst-djfx, mpc-vst-tape-echo) so one wrapper is not built three different ways.
+name: release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version for the zip (vst.json "version" is major*1000+minor*100+patch*10)
+        required: true
+        type: string
+      dry_run:
+        description: Zip and previews as run artifacts only (no draft release)
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  vst:
+    uses: open-mpc/mpc-vst-plugins/.github/workflows/vst-release.yml@52c1fb0
+    permissions: { contents: write }
+    with:
+      tag: mpc-dj-fx-2-vst-v${{ inputs.version }}
+      version: ${{ inputs.version }}
+      tools_ref: 52c1fb0
+      vst_dir: vst
+      build: vst/build.sh
+      host_test: '"$MPC_VST/tools/test_port.sh" vst/vst.json'
+      about: Two-deck DJ effects rack for MPC standalone — EQ, filter, delay, reverb, flanger and looper, switchable Classic/Rack interfaces.
+      license: MIT
