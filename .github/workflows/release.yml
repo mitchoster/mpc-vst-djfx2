@@ -18,13 +18,16 @@ on:
       dry_run:
         description: Zip and previews as run artifacts only (no draft release)
         required: false
-        default: false
+        default: true
         type: boolean
+permissions:
+  contents: read
 
 jobs:
   vst:
+    permissions:
+      contents: write
     uses: open-mpc/mpc-vst-plugins/.github/workflows/vst-release.yml@52c1fb072966d7de77e97dd9eec0544548b042dc
-    permissions: { contents: write }
     with:
       tag: mpc-dj-fx-2-vst-v${{ inputs.version }}
       version: ${{ inputs.version }}
@@ -34,3 +37,4 @@ jobs:
       host_test: '"$MPC_VST/tools/test_port.sh" vst/vst.json'
       about: Two-deck DJ effects rack for MPC standalone — EQ, filter, delay, reverb, flanger and looper, switchable Classic/Rack interfaces.
       license: MIT
+      dry_run: ${{ inputs.dry_run }}
