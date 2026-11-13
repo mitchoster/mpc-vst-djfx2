@@ -14,7 +14,13 @@ MV="${MPC_VST_PLUGINS:-${MPC_VST:-$(cd "$(dirname "$0")/../../mpc-vst-plugins" 2
 # when docker runs on this machine).
 WORKSPACE="${MPC_VST_WORKSPACE:-$(cd "$MV/.." 2>/dev/null && pwd)}"
 HOST_ROOT="${MPC_VST_HOST_ROOT:-}"
-host() { case "$1" in "$WORKSPACE"/*) printf '%s%s' "$HOST_ROOT" "${1#"$WORKSPACE"}" ;; *) printf '%s' "$1" ;; esac; }
+# No HOST_ROOT means the daemon sees the same paths we do (a local Docker, and every CI runner): translate
+# nothing. Only strip the workspace prefix when there is a prefix to put in its place — without this guard
+# an unset HOST_ROOT turned /home/runner/work/<repo>/mpc-vst-plugins into /mpc-vst-plugins (CI, 2026-11-13).
+host() {
+  if [ -z "$HOST_ROOT" ]; then printf '%s' "$1"; return; fi
+  case "$1" in "$WORKSPACE"/*) printf '%s%s' "$HOST_ROOT" "${1#"$WORKSPACE"}" ;; *) printf '%s' "$1" ;; esac
+}
 
 
 "$(host "$MV")/tools/build_port.sh" "$(host "$HERE")/vst.json" "$@"
